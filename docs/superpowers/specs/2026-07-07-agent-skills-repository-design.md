@@ -36,8 +36,8 @@ agent-skills/
 │       ├── README.md
 │       └── references/
 ├── scripts/
-│   ├── validate-skills
-│   └── package-skills
+│   ├── validate_skills.py
+│   └── package_skills.py
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
@@ -90,9 +90,9 @@ Validation exits non-zero on failure and identifies the skill, file, violated ru
 
 ## Packaging and Releases
 
-Generated files are written to ignored `dist/` and never committed. Packaging uses standard, dependency-free tooling and produces deterministic archives.
+Generated files are written to ignored `dist/` and never committed. Collection tooling uses Python 3's standard library, so local validation and packaging require no project dependency installation. Archives use stable file ordering, normalized timestamps, and normalized permissions so identical source and version inputs produce identical output.
 
-A semantic-version tag such as `v1.2.0` triggers the release workflow. The workflow:
+A semantic-version tag matching `vMAJOR.MINOR.PATCH`, such as `v1.2.0`, triggers the release workflow. The workflow:
 
 1. Validates the tag format and every skill.
 2. Packages each skill as `<skill-name>-v<version>.skill`.
@@ -103,6 +103,8 @@ A semantic-version tag such as `v1.2.0` triggers the release workflow. The workf
 
 Packaging builds in a temporary directory. Artifacts are published only after the complete build and smoke test succeed, preventing partial releases.
 
+Each individual `.skill` archive contains one top-level directory named after the skill. The collection `.zip` contains the top-level `skills/` directory and all discovered skills. The release workflow receives only the GitHub `contents: write` permission needed to create the release; ordinary CI remains read-only.
+
 ## Migration and Cleanup
 
 The initial migration will:
@@ -111,10 +113,10 @@ The initial migration will:
 - Add `skills/abd-code-review/README.md`.
 - Replace the root README with the collection catalog.
 - Add collection validation, packaging, CI, release automation, contribution guidance, changelog, MIT license, and ignore rules.
-- Delete the tracked/generated `abd-code-review.skill` package.
+- Delete the existing generated `abd-code-review.skill` package.
 - Delete `fixtures/`, `evals/`, and `abd-code-review-workspace/` in full.
 - Delete the empty `.agents/` and `.codex/` directories.
-- Replace the incomplete empty `.git/` directory with a correctly initialized root repository.
+- Use a single initialized root Git repository with `main` as its default branch.
 
 The seven repositories under `fixtures/` currently contain the `main` and feature histories used by the old branch-diff evaluations. Removing only their `.git` directories would break those evaluations and leave misleading fixture source behind. Because evaluations are explicitly out of scope, the correct migration is to remove the fixture repositories and all evaluation infrastructure together.
 
@@ -138,6 +140,6 @@ No prompt evals, model-quality benchmarks, or test repositories will be retained
 - The root README links to the skill README and documents installation.
 - Validation passes locally and in CI.
 - No generated archive is tracked by Git.
-- A test version tag can produce individual archives, a collection archive, and valid checksums.
+- A local packaging run with a representative semantic version produces individual archives, a collection archive, and valid checksums; the release workflow performs the same checks before publishing a real tag.
 - The obsolete fixture, eval, benchmark workspace, and nested Git repositories are absent.
 - The repository has a single initialized Git root and an MIT license.
