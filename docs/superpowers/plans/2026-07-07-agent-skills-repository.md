@@ -723,7 +723,7 @@ git commit -m "feat: add deterministic skill packaging"
 - Consumes: validator and packager commands from Tasks 1–2.
 - Produces: the final public repository layout and an independently installable `skills/abd-code-review/`.
 
-- [ ] **Step 1: Write the failing repository contract test**
+- [x] **Step 1: Write the failing repository contract test**
 
 Create `tests/test_repository_layout.py`:
 
@@ -787,7 +787,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the repository test and confirm it fails for the old layout**
+- [x] **Step 2: Run the repository test and confirm it fails for the old layout**
 
 Run:
 
@@ -797,7 +797,7 @@ python3 -m unittest tests.test_repository_layout -v
 
 Expected: FAIL because `skills/abd-code-review/` and root documentation do not yet exist and obsolete paths remain.
 
-- [ ] **Step 3: Move the runtime skill intact**
+- [x] **Step 3: Move the runtime skill intact**
 
 Run:
 
@@ -815,7 +815,7 @@ test "$(find skills/abd-code-review/references -type f | wc -l)" -eq 14
 
 Expected: both commands exit `0`.
 
-- [ ] **Step 4: Add the short skill README**
+- [x] **Step 4: Add the short skill README**
 
 Create `skills/abd-code-review/README.md`:
 
@@ -853,7 +853,7 @@ Is this payment-worker change safe to ship?
 The skill is agent-agnostic but expects the host agent to be able to read repository files and run the project's normal Git and verification commands.
 ```
 
-- [ ] **Step 5: Replace the root README with the collection catalog**
+- [x] **Step 5: Replace the root README with the collection catalog**
 
 Replace `README.md` with:
 
@@ -889,7 +889,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for naming, documentation, validation, an
 [MIT](LICENSE)
 ```
 
-- [ ] **Step 6: Add contribution, changelog, license, and ignore files**
+- [x] **Step 6: Add contribution, changelog, license, and ignore files**
 
 Create `CONTRIBUTING.md`:
 
