@@ -1024,7 +1024,7 @@ git commit -m "refactor: organize skills as a public collection"
 - Consumes: validator, packager, and unit-test commands established in Tasks 1–3.
 - Produces: read-only push/PR CI and exact semantic-tag releases with `contents: write` only in the release workflow.
 
-- [ ] **Step 1: Write failing workflow contract tests**
+- [x] **Step 1: Write failing workflow contract tests**
 
 Create `tests/test_workflows.py`:
 
@@ -1060,7 +1060,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run workflow tests and confirm missing-file failures**
+- [x] **Step 2: Run workflow tests and confirm missing-file failures**
 
 Run:
 
@@ -1070,7 +1070,7 @@ python3 -m unittest tests.test_workflows -v
 
 Expected: two ERROR results with `FileNotFoundError` for the workflow files.
 
-- [ ] **Step 3: Add read-only CI**
+- [x] **Step 3: Add read-only CI**
 
 Create `.github/workflows/ci.yml`:
 
@@ -1107,7 +1107,7 @@ jobs:
         run: python3 scripts/package_skills.py --version v0.0.0 --dry-run
 ```
 
-- [ ] **Step 4: Add exact-tag release automation**
+- [x] **Step 4: Add exact-tag release automation**
 
 Create `.github/workflows/release.yml`:
 
@@ -1157,7 +1157,7 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
 ```
 
-- [ ] **Step 5: Run workflow and full structural verification**
+- [x] **Step 5: Run workflow and full structural verification**
 
 Run:
 
@@ -1170,7 +1170,7 @@ python3 scripts/package_skills.py --version v0.0.0 --dry-run
 
 Expected: workflow tests pass; all 16 tests pass; validator and packaging dry run succeed.
 
-- [ ] **Step 6: Commit workflow automation**
+- [x] **Step 6: Commit workflow automation**
 
 ```bash
 git add .github/workflows tests/test_workflows.py
