@@ -323,6 +323,7 @@ def cmd_transitions(args, cfg):
 
 
 def cmd_transition(args, cfg):
+    cfg.require(live=not args.dry_run)
     transition_id = args.id
     if transition_id is None:
         if args.dry_run:

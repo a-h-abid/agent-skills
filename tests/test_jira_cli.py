@@ -5,6 +5,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills" / "abd-jira-cloud" / "scripts" / "jira.py"
@@ -54,7 +55,7 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaises(jira.JiraError):
             jira.path_segment("bad\nkey", "issue")
 
-    def test_dry_run_rejects_invalid_base_url_before_emitting_preview(self) -> None:
+    def test_transition_dry_run_rejects_invalid_base_url_before_emitting_preview(self) -> None:
         cfg = jira.Config(
             {
                 "JIRA_BASE_URL": "https://.atlassian.net",
@@ -62,12 +63,20 @@ class ConfigurationTests(unittest.TestCase):
                 "JIRA_API_TOKEN": "token",
             }
         )
+        args = SimpleNamespace(
+            key="ABC-1",
+            to="Done",
+            id=None,
+            resolution=None,
+            comment=None,
+            dry_run=True,
+        )
         stdout = io.StringIO()
         with redirect_stdout(stdout):
             with self.assertRaisesRegex(
                 jira.JiraError, r"JIRA_BASE_URL must be an HTTPS \*\.atlassian\.net"
             ):
-                jira.request("GET", "/rest/api/3/myself", cfg, dry_run=True)
+                jira.cmd_transition(args, cfg)
         self.assertEqual(stdout.getvalue(), "")
 
 
