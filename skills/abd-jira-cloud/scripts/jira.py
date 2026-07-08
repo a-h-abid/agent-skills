@@ -113,6 +113,8 @@ def _origin(url):
         raise JiraError(f"Invalid redirect URL: {error}.") from None
     if parsed.username is not None or parsed.password is not None:
         raise JiraError("Refusing a redirect URL with credentials.")
+    if port is not None and port <= 0:
+        raise JiraError("Refusing a redirect URL with an invalid port.")
     port = port or (443 if parsed.scheme.lower() == "https" else 80)
     return parsed.scheme.lower(), (parsed.hostname or "").lower(), port
 

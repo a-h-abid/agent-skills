@@ -211,6 +211,19 @@ class TransportTests(unittest.TestCase):
                 "https://example.atlassian.net:bad/steal",
             )
 
+    def test_redirect_policy_rejects_explicit_invalid_port_zero(self) -> None:
+        handler = jira.SameOriginRedirectHandler()
+        request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")
+        with self.assertRaises(jira.JiraError):
+            handler.redirect_request(
+                request,
+                None,
+                302,
+                "Found",
+                {},
+                "https://example.atlassian.net:0/steal",
+            )
+
     def test_redirect_policy_allows_same_origin_https(self) -> None:
         handler = jira.SameOriginRedirectHandler()
         request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")

@@ -84,3 +84,26 @@ Output Summary
 - Ran 16 tests from `tests.test_jira_cli`
 - All 16 passed
 - `git diff --check` passed with no formatting issues
+
+---
+
+Final Task 2 Redirect Fix Addendum
+
+Scope
+- Tightened redirect validation in `skills/abd-jira-cloud/scripts/jira.py`
+- Added one offline regression test in `tests/test_jira_cli.py`
+
+What Changed
+- Redirect targets with an explicit invalid port such as `:0` are now rejected before port normalization.
+- The redirect policy still only accepts same-origin HTTPS destinations.
+
+Covering Test Command
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_jira_cli -v`
+
+Result
+- Passed
+
+Output Summary
+- Ran 17 tests from `tests.test_jira_cli`
+- All 17 passed
+- The new regression `TransportTests.test_redirect_policy_rejects_explicit_invalid_port_zero` passed
