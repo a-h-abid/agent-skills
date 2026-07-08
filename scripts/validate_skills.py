@@ -94,7 +94,7 @@ def validate_skill(skill: Path, root: Path) -> list[str]:
             errors.append(f"{display(skill_md, root)}: {error}; expected portable YAML frontmatter")
         else:
             name = frontmatter.get("name", "").strip("'\"")
-            description = frontmatter.get("description", "")
+            description = frontmatter.get("description", "").strip("'\"")
             if not name:
                 errors.append(f"{display(skill_md, root)}: name is empty; expected name: {skill.name}")
             elif name != skill.name:

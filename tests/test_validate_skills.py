@@ -60,6 +60,16 @@ class ValidateCollectionTests(unittest.TestCase):
             self.assertTrue(any("does not match directory" in error for error in errors))
             self.assertTrue(any("description" in error and "non-empty" in error for error in errors))
 
+    def test_reports_quoted_empty_descriptions(self) -> None:
+        for description in ('""', "''"):
+            with self.subTest(description=description), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                write_skill(root, description=description)
+
+                errors = validate_collection(root)
+
+                self.assertTrue(any("description" in error and "non-empty" in error for error in errors))
+
     def test_reports_missing_and_escaping_resource_references(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
