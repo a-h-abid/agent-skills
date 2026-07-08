@@ -68,6 +68,13 @@ def local_references(source: Path) -> set[str]:
     return references
 
 
+def normalize_scalar(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    return value.strip()
+
+
 def display(path: Path, root: Path) -> str:
     try:
         return path.relative_to(root).as_posix()
@@ -93,8 +100,8 @@ def validate_skill(skill: Path, root: Path) -> list[str]:
         except (OSError, UnicodeError, FrontmatterError) as error:
             errors.append(f"{display(skill_md, root)}: {error}; expected portable YAML frontmatter")
         else:
-            name = frontmatter.get("name", "").strip("'\"")
-            description = frontmatter.get("description", "").strip("'\"")
+            name = normalize_scalar(frontmatter.get("name", ""))
+            description = normalize_scalar(frontmatter.get("description", ""))
             if not name:
                 errors.append(f"{display(skill_md, root)}: name is empty; expected name: {skill.name}")
             elif name != skill.name:
@@ -108,7 +115,14 @@ def validate_skill(skill: Path, root: Path) -> list[str]:
 
     skill_root = skill.resolve()
     for markdown in sorted(skill.rglob("*.md")):
-        for reference in sorted(local_references(markdown)):
+        try:
+            references = local_references(markdown)
+        except (OSError, UnicodeError) as error:
+            errors.append(
+                f"{display(markdown, root)}: cannot read Markdown: {error}; expected readable UTF-8 text"
+            )
+            continue
+        for reference in sorted(references):
             candidate = (markdown.parent / reference).resolve()
             try:
                 candidate.relative_to(skill_root)
