@@ -971,7 +971,7 @@ __pycache__/
 .DS_Store
 ```
 
-- [ ] **Step 7: Remove the explicitly retired evaluation system and generated package**
+- [x] **Step 7: Remove the explicitly retired evaluation system and generated package**
 
 First confirm each target exactly matches the approved removal list:
 
@@ -988,7 +988,7 @@ rm -rf .agents .codex abd-code-review-workspace evals fixtures abd-code-review.s
 
 Expected: `.agents`, `.codex`, all evaluation inputs/outputs, seven nested Git repositories, and the generated package are absent. Do not remove the root `.git`.
 
-- [ ] **Step 8: Run migration tests and tooling against the real collection**
+- [x] **Step 8: Run migration tests and tooling against the real collection**
 
 Run:
 
@@ -1001,7 +1001,7 @@ python3 -m unittest discover -s tests -v
 
 Expected: repository layout tests pass; validator reports `Validated 1 skill(s).`; dry run reports success; all 14 tests pass.
 
-- [ ] **Step 9: Commit the migration**
+- [x] **Step 9: Commit the migration**
 
 ```bash
 git add .gitignore CHANGELOG.md CONTRIBUTING.md LICENSE README.md skills tests/test_repository_layout.py
