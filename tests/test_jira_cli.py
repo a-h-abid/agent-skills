@@ -185,6 +185,32 @@ class TransportTests(unittest.TestCase):
             with self.subTest(destination=destination), self.assertRaises(jira.JiraError):
                 handler.redirect_request(request, None, 302, "Found", {}, destination)
 
+    def test_redirect_policy_rejects_credentials_in_redirect_url(self) -> None:
+        handler = jira.SameOriginRedirectHandler()
+        request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")
+        with self.assertRaises(jira.JiraError):
+            handler.redirect_request(
+                request,
+                None,
+                302,
+                "Found",
+                {},
+                "https://user:pass@example.atlassian.net/steal",
+            )
+
+    def test_redirect_policy_rejects_malformed_redirect_url(self) -> None:
+        handler = jira.SameOriginRedirectHandler()
+        request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")
+        with self.assertRaises(jira.JiraError):
+            handler.redirect_request(
+                request,
+                None,
+                302,
+                "Found",
+                {},
+                "https://example.atlassian.net:bad/steal",
+            )
+
     def test_redirect_policy_allows_same_origin_https(self) -> None:
         handler = jira.SameOriginRedirectHandler()
         request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")

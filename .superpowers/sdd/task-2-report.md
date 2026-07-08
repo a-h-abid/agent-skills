@@ -57,3 +57,30 @@ Self-Review
 Concerns
 - No code concerns from the scoped Task 2 implementation
 - Only environment concern: `coverage` is unavailable in this sandbox
+
+---
+
+Review Findings Fix Addendum
+
+Scope
+- Tightened redirect validation in `skills/abd-jira-cloud/scripts/jira.py`
+- Added focused regression coverage in `tests/test_jira_cli.py`
+
+What Changed
+- Redirect targets with embedded credentials are now rejected even when the scheme, host, and port match.
+- Malformed redirect targets, including invalid ports, now raise `JiraError` instead of leaking `ValueError`.
+- Added offline regression tests for credential-bearing and malformed redirect URLs.
+
+Covering Test Command
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_jira_cli -v`
+
+Covering Tests
+- `tests.test_jira_cli.TransportTests.test_redirect_policy_rejects_credentials_in_redirect_url`
+- `tests.test_jira_cli.TransportTests.test_redirect_policy_rejects_malformed_redirect_url`
+- `tests.test_jira_cli.TransportTests.test_redirect_policy_rejects_cross_origin_and_downgrade`
+- `tests.test_jira_cli.TransportTests.test_redirect_policy_allows_same_origin_https`
+
+Output Summary
+- Ran 16 tests from `tests.test_jira_cli`
+- All 16 passed
+- `git diff --check` passed with no formatting issues

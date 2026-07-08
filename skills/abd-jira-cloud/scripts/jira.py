@@ -107,7 +107,13 @@ class Config:
 
 def _origin(url):
     parsed = urllib.parse.urlsplit(url)
-    port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise JiraError(f"Invalid redirect URL: {error}.") from None
+    if parsed.username is not None or parsed.password is not None:
+        raise JiraError("Refusing a redirect URL with credentials.")
+    port = port or (443 if parsed.scheme.lower() == "https" else 80)
     return parsed.scheme.lower(), (parsed.hostname or "").lower(), port
 
 
