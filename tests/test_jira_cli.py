@@ -4,10 +4,11 @@ import importlib.util
 import io
 import json
 import socket
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -234,6 +235,212 @@ class TransportTests(unittest.TestCase):
             redirected.full_url,
             "https://example.atlassian.net/rest/api/3/myself?moved=1",
         )
+
+
+class HelperBehaviorTests(unittest.TestCase):
+    def test_text_to_adf_handles_empty_lines_and_paragraphs(self) -> None:
+        self.assertEqual(
+            jira.text_to_adf(""),
+            {"type": "doc", "version": 1, "content": [{"type": "paragraph"}]},
+        )
+        self.assertEqual(
+            jira.text_to_adf("one\ntwo\n\nthree")["content"],
+            [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {"type": "text", "text": "one"},
+                        {"type": "hardBreak"},
+                        {"type": "text", "text": "two"},
+                    ],
+                },
+                {"type": "paragraph", "content": [{"type": "text", "text": "three"}]},
+            ],
+        )
+
+    def test_account_resolution_is_exact_or_unambiguous(self) -> None:
+        cfg = jira.Config({"JIRA_BASE_URL": "https://example.atlassian.net"})
+        exact = [
+            {"emailAddress": "other@example.com", "accountId": "other"},
+            {"emailAddress": "person@example.com", "accountId": "exact"},
+        ]
+        with mock.patch.object(jira, "request", return_value=exact):
+            self.assertEqual(jira.resolve_account_id(cfg, "PERSON@example.com"), "exact")
+        with mock.patch.object(jira, "request", return_value=[{"accountId": "only"}]):
+            self.assertEqual(jira.resolve_account_id(cfg, "Only Person"), "only")
+        with mock.patch.object(jira, "request", return_value=[]):
+            with self.assertRaisesRegex(jira.JiraError, "No user found"):
+                jira.resolve_account_id(cfg, "missing")
+        ambiguous = [
+            {"displayName": "One", "accountId": "one"},
+            {"displayName": "Two", "accountId": "two"},
+        ]
+        with mock.patch.object(jira, "request", return_value=ambiguous):
+            with self.assertRaisesRegex(jira.JiraError, "matched 2 users"):
+                jira.resolve_account_id(cfg, "person")
+
+
+class CommandBehaviorTests(unittest.TestCase):
+    def invoke(self, argv, responses):
+        calls = []
+        queue = list(responses)
+
+        def fake_request(method, path, cfg, query=None, body=None, dry_run=False):
+            calls.append((method, path, query, body, dry_run))
+            return queue.pop(0)
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(jira, "request", side_effect=fake_request):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                status = jira.main(argv)
+        return status, stdout.getvalue(), stderr.getvalue(), calls
+
+    def test_command_request_contracts(self) -> None:
+        cases = (
+            (["whoami"], [{"accountId": "me"}], "GET", "/rest/api/3/myself", None, None),
+            (["get", "ABC-1", "--fields", "summary,status"], [{"key": "ABC-1"}], "GET", "/rest/api/3/issue/ABC-1", {"fields": "summary,status"}, None),
+            (["comment", "ABC-1", "hello"], [{"id": "10"}], "POST", "/rest/api/3/issue/ABC-1/comment", None, {"body": jira.text_to_adf("hello")}),
+            (["update", "ABC-1", "--summary", "New"], [{}], "PUT", "/rest/api/3/issue/ABC-1", None, {"fields": {"summary": "New"}}),
+            (["transitions", "ABC-1"], [{"transitions": []}], "GET", "/rest/api/3/issue/ABC-1/transitions", None, None),
+            (["transition", "ABC-1", "--id", "31"], [{}], "POST", "/rest/api/3/issue/ABC-1/transitions", None, {"transition": {"id": "31"}}),
+            (["assign", "ABC-1", "--account-id", "acct"], [{}], "PUT", "/rest/api/3/issue/ABC-1/assignee", None, {"accountId": "acct"}),
+            (["watch", "ABC-1", "--account-id", "acct"], [{}], "POST", "/rest/api/3/issue/ABC-1/watchers", None, "acct"),
+            (["watch", "ABC-1", "--account-id", "acct", "--remove"], [{}], "DELETE", "/rest/api/3/issue/ABC-1/watchers", {"accountId": "acct"}, None),
+            (["watchers", "ABC-1"], [{}], "GET", "/rest/api/3/issue/ABC-1/watchers", None, None),
+            (["create", "--project", "ABC", "--summary", "New"], [{"key": "ABC-2"}], "POST", "/rest/api/3/issue", None, {"fields": {"project": {"key": "ABC"}, "issuetype": {"name": "Task"}, "summary": "New"}}),
+            (["users", "person@example.com"], [[]], "GET", "/rest/api/3/user/search", {"query": "person@example.com"}, None),
+        )
+        for argv, responses, method, path, query, body in cases:
+            with self.subTest(command=argv[0]):
+                status, stdout, _, calls = self.invoke(argv, responses)
+                self.assertEqual(status, 0)
+                self.assertEqual((calls[-1][0], calls[-1][1]), (method, path))
+                self.assertEqual(calls[-1][2], query)
+                self.assertEqual(calls[-1][3], body)
+                json.loads(stdout)
+
+    def test_comment_accepts_stdin_and_adf_file(self) -> None:
+        with mock.patch.object(jira.sys, "stdin", io.StringIO("from stdin")):
+            status, _, _, calls = self.invoke(["comment", "ABC-1"], [{"id": "10"}])
+        self.assertEqual(status, 0)
+        self.assertEqual(calls[-1][3], {"body": jira.text_to_adf("from stdin")})
+
+        adf = {"type": "doc", "version": 1, "content": [{"type": "paragraph"}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "comment.json"
+            path.write_text(json.dumps(adf), encoding="utf-8")
+            status, _, _, calls = self.invoke(
+                ["comment", "ABC-1", "--adf-file", str(path)], [{"id": "11"}]
+            )
+        self.assertEqual(status, 0)
+        self.assertEqual(calls[-1][3], {"body": adf})
+
+    def test_search_defaults_to_100_and_honors_explicit_all(self) -> None:
+        status, stdout, _, calls = self.invoke(
+            ["search", "project = ABC"],
+            [{"issues": [{"key": "ABC-1"}], "isLast": True}],
+        )
+        self.assertEqual(status, 0)
+        self.assertEqual(calls[0][3]["maxResults"], 100)
+        self.assertEqual(json.loads(stdout)["count"], 1)
+
+        status, _, _, calls = self.invoke(
+            ["search", "project = ABC", "--all"],
+            [
+                {"issues": [{"key": "ABC-1"}], "nextPageToken": "next", "isLast": False},
+                {"issues": [{"key": "ABC-2"}], "isLast": True},
+            ],
+        )
+        self.assertEqual(status, 0)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1][3]["nextPageToken"], "next")
+
+    def test_search_rejects_repeated_page_token(self) -> None:
+        status, _, stderr, _ = self.invoke(
+            ["search", "project = ABC", "--all"],
+            [
+                {"issues": [], "nextPageToken": "same", "isLast": False},
+                {"issues": [], "nextPageToken": "same", "isLast": False},
+            ],
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("repeated page token", stderr)
+
+        status, _, stderr, _ = self.invoke(
+            ["search", "project = ABC", "--all"],
+            [{"issues": [], "isLast": False}],
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("no next page token", stderr)
+
+    def test_transition_name_must_resolve_uniquely(self) -> None:
+        listing = {
+            "transitions": [
+                {"id": "1", "name": "Close", "to": {"name": "Done"}},
+                {"id": "2", "name": "Resolve", "to": {"name": "Done"}},
+            ]
+        }
+        status, _, stderr, calls = self.invoke(
+            ["transition", "ABC-1", "--to", "Done"], [listing]
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("matched multiple transitions", stderr)
+        self.assertEqual(len(calls), 1)
+
+    def test_parser_rejects_conflicting_identity_and_bad_limits(self) -> None:
+        parser = jira.build_parser()
+        invalid = (
+            ["assign", "ABC-1", "--email", "a@example.com", "--unassign"],
+            ["watch", "ABC-1", "--email", "a@example.com", "--account-id", "acct"],
+            ["search", "project = ABC", "--limit", "0"],
+            ["search", "project = ABC", "--limit", "2", "--all"],
+        )
+        for argv in invalid:
+            with self.subTest(argv=argv), self.assertRaises(SystemExit) as raised:
+                parser.parse_args(argv)
+            self.assertEqual(raised.exception.code, 2)
+
+    def test_invalid_adf_file_is_a_clean_command_error(self) -> None:
+        with self.subTest(case="missing"), redirect_stderr(io.StringIO()):
+            status = jira.main(["comment", "ABC-1", "--adf-file", "/missing/adf.json"])
+            self.assertEqual(status, 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "invalid.json"
+            path.write_text("not-json", encoding="utf-8")
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                status = jira.main(["comment", "ABC-1", "--adf-file", str(path)])
+            self.assertEqual(status, 1)
+            self.assertIn("Invalid JSON", stderr.getvalue())
+
+    def test_update_convenience_flags_override_generic_fields(self) -> None:
+        status, _, _, calls = self.invoke(
+            ["update", "ABC-1", "--field", "summary=Old", "--summary", "New"], [{}]
+        )
+        self.assertEqual(status, 0)
+        self.assertEqual(calls[-1][3], {"fields": {"summary": "New"}})
+
+    def test_whoami_dry_run_emits_one_json_value(self) -> None:
+        env = {"JIRA_BASE_URL": "https://example.atlassian.net"}
+        output = io.StringIO()
+        with mock.patch.dict(jira.os.environ, env, clear=True), redirect_stdout(output):
+            self.assertEqual(jira.main(["--dry-run", "whoami"]), 0)
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["method"], "GET")
+        self.assertEqual(document["url"], "https://example.atlassian.net/rest/api/3/myself")
+
+    def test_transition_dry_run_by_name_emits_one_json_value(self) -> None:
+        env = {
+            "JIRA_BASE_URL": "https://example.atlassian.net",
+            "JIRA_EMAIL": "",
+            "JIRA_API_TOKEN": "",
+        }
+        output = io.StringIO()
+        with mock.patch.dict(jira.os.environ, env, clear=True), redirect_stdout(output):
+            self.assertEqual(jira.main(["--dry-run", "transition", "ABC-1", "--to", "Done"]), 0)
+        document = json.loads(output.getvalue())
+        self.assertEqual(document["body"]["transition"]["id"], "<resolved:Done>")
 
 
 if __name__ == "__main__":

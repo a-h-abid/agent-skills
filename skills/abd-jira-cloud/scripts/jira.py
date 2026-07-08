@@ -255,6 +255,40 @@ def parse_kv_json(pairs):
     return fields
 
 
+def positive_int(value):
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a positive integer") from None
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
+def load_json_file(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except OSError as error:
+        raise JiraError(f"Could not read JSON file '{path}': {error}.") from None
+    except json.JSONDecodeError as error:
+        raise JiraError(f"Invalid JSON in '{path}': {error}.") from None
+
+
+def _matching_transition_ids(listing, target):
+    lowered = target.lower()
+    matches = {
+        transition["id"]
+        for transition in listing.get("transitions", [])
+        if lowered
+        in (
+            transition.get("name", "").lower(),
+            transition.get("to", {}).get("name", "").lower(),
+        )
+    }
+    return sorted(matches)
+
+
 # --------------------------------------------------------------------------- #
 # Commands
 # --------------------------------------------------------------------------- #
@@ -280,38 +314,40 @@ def cmd_get(args, cfg):
 
 def cmd_search(args, cfg):
     fields = (
-        [f.strip() for f in args.fields.split(",")]
+        [field.strip() for field in args.fields.split(",") if field.strip()]
         if args.fields
         else ["summary", "status", "assignee", "updated"]
     )
+    limit = None if args.all else args.limit
     collected = []
     next_token = None
+    seen_tokens = set()
     while True:
-        page_size = 100
-        if args.limit:
-            page_size = min(page_size, args.limit - len(collected))
+        page_size = 100 if limit is None else min(100, limit - len(collected))
         body = {"jql": args.jql, "maxResults": page_size, "fields": fields}
         if next_token:
             body["nextPageToken"] = next_token
-        res = request("POST", f"{API}/search/jql", cfg, body=body,
-                      dry_run=args.dry_run)
-        if res is None:  # dry-run
+        result = request("POST", f"{API}/search/jql", cfg, body=body, dry_run=args.dry_run)
+        if result is None:
             return
-        collected.extend(res.get("issues", []))
-        next_token = res.get("nextPageToken")
-        if res.get("isLast") or not next_token:
+        collected.extend(result.get("issues", []))
+        if limit is not None and len(collected) >= limit:
+            collected = collected[:limit]
             break
-        if args.limit and len(collected) >= args.limit:
+        if result.get("isLast"):
             break
-    if args.limit:
-        collected = collected[: args.limit]
+        next_token = result.get("nextPageToken")
+        if not next_token:
+            raise JiraError("Jira pagination was not last but returned no next page token.")
+        if next_token in seen_tokens:
+            raise JiraError("Jira returned a repeated page token; refusing to loop forever.")
+        seen_tokens.add(next_token)
     emit({"count": len(collected), "issues": collected})
 
 
 def cmd_comment(args, cfg):
     if args.adf_file:
-        with open(args.adf_file) as fh:
-            adf = json.load(fh)
+        adf = load_json_file(args.adf_file)
     else:
         text = args.body if args.body is not None else sys.stdin.read()
         adf = text_to_adf(text)
@@ -364,32 +400,24 @@ def cmd_transitions(args, cfg):
 
 
 def cmd_transition(args, cfg):
-    cfg.require(live=not args.dry_run)
     transition_id = args.id
     if transition_id is None:
         if args.dry_run:
-            print(
-                f"[dry-run] Would GET {issue_path(args.key, '/transitions')} to "
-                f"resolve '{args.to}' to a transition id, then POST it."
-            )
-            transition_id = "<resolved-id>"
+            transition_id = f"<resolved:{args.to}>"
         else:
             listing = request("GET", issue_path(args.key, "/transitions"), cfg)
-            match = None
-            for t in listing.get("transitions", []):
-                to_name = t.get("to", {}).get("name", "")
-                if args.to.lower() in (t["name"].lower(), to_name.lower()):
-                    match = t["id"]
-                    break
-            if match is None:
-                avail = ", ".join(
-                    f'{t["name"]} -> {t.get("to", {}).get("name")}'
-                    for t in listing.get("transitions", [])
+            matches = _matching_transition_ids(listing, args.to)
+            if not matches:
+                available = ", ".join(
+                    f'{item.get("name")} -> {item.get("to", {}).get("name")}'
+                    for item in listing.get("transitions", [])
                 )
+                raise JiraError(f"No transition matching '{args.to}'. Available: {available}")
+            if len(matches) > 1:
                 raise JiraError(
-                    f"No transition matching '{args.to}'. Available: {avail}"
+                    f"'{args.to}' matched multiple transitions ({', '.join(matches)}); pass --id."
                 )
-            transition_id = match
+            transition_id = matches[0]
 
     body = {"transition": {"id": transition_id}}
     if args.resolution:
@@ -518,7 +546,18 @@ def build_parser():
     s = sub.add_parser("search", help="Search issues with JQL.")
     s.add_argument("jql", help='JQL string, e.g. "project = ABC AND status != Done".')
     s.add_argument("--fields", help="Comma-separated fields to return.")
-    s.add_argument("--limit", type=int, help="Max issues to return (paginates).")
+    search_bound = s.add_mutually_exclusive_group()
+    search_bound.add_argument(
+        "--limit",
+        type=positive_int,
+        default=DEFAULT_SEARCH_LIMIT,
+        help="Max issues to return (default: 100).",
+    )
+    search_bound.add_argument(
+        "--all",
+        action="store_true",
+        help="Fetch all matching issues; may make many requests.",
+    )
     s.set_defaults(func=cmd_search)
 
     c = sub.add_parser("comment", help="Add a comment (plain text -> ADF).")
@@ -553,15 +592,17 @@ def build_parser():
 
     a = sub.add_parser("assign", help="Set or clear the assignee.")
     a.add_argument("key")
-    a.add_argument("--email", help="Assignee email (resolved to accountId).")
-    a.add_argument("--account-id", help="Assignee accountId (skips lookup).")
-    a.add_argument("--unassign", action="store_true", help="Clear the assignee.")
+    assign_identity = a.add_mutually_exclusive_group(required=True)
+    assign_identity.add_argument("--email", help="Assignee email (resolved to accountId).")
+    assign_identity.add_argument("--account-id", help="Assignee accountId (skips lookup).")
+    assign_identity.add_argument("--unassign", action="store_true", help="Clear the assignee.")
     a.set_defaults(func=cmd_assign)
 
     w = sub.add_parser("watch", help="Add or remove a watcher.")
     w.add_argument("key")
-    w.add_argument("--email", help="Watcher email (resolved to accountId).")
-    w.add_argument("--account-id", help="Watcher accountId (skips lookup).")
+    watcher_identity = w.add_mutually_exclusive_group(required=True)
+    watcher_identity.add_argument("--email", help="Watcher email (resolved to accountId).")
+    watcher_identity.add_argument("--account-id", help="Watcher accountId (skips lookup).")
     w.add_argument("--remove", action="store_true", help="Remove instead of add.")
     w.set_defaults(func=cmd_watch)
 
