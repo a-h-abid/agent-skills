@@ -9,6 +9,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -30,7 +31,12 @@ def normalize_version(value: str) -> str:
 
 
 def source_files(skill: Path) -> list[Path]:
-    return sorted((path for path in skill.rglob("*") if path.is_file()), key=lambda path: path.as_posix())
+    paths = list(skill.rglob("*"))
+    for path in paths:
+        if path.is_symlink():
+            relative = path.relative_to(skill).as_posix()
+            raise PackagingError(f"{skill.name}: symlink source is not allowed: {relative}")
+    return sorted((path for path in paths if path.is_file()), key=lambda path: path.as_posix())
 
 
 def write_archive(archive_path: Path, entries: list[tuple[str, Path]]) -> None:
@@ -132,9 +138,21 @@ def build_packages(
 
         if dry_run:
             return []
+        backup: Path | None = None
         if output.exists():
-            shutil.rmtree(output)
-        os.replace(stage, output)
+            backup = output.parent / f".{output.name}.backup-{uuid.uuid4().hex}"
+            os.replace(output, backup)
+        try:
+            os.replace(stage, output)
+        except OSError:
+            if backup is not None:
+                os.replace(backup, output)
+            raise
+        if backup is not None:
+            if backup.is_dir():
+                shutil.rmtree(backup)
+            else:
+                backup.unlink()
 
     return [output / name for name in published_names]
 

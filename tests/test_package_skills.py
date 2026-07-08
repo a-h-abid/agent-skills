@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -58,6 +59,10 @@ class PackageSkillsTests(unittest.TestCase):
                         "abd-alpha/references/guide.md",
                     ],
                 )
+                for info in archive.infolist():
+                    self.assertEqual(info.date_time, (1980, 1, 1, 0, 0, 0))
+                    self.assertEqual(info.create_system, 3)
+                    self.assertEqual((info.external_attr >> 16) & 0o777, 0o644)
             with zipfile.ZipFile(output / "abd-skills-v1.2.3.zip") as archive:
                 self.assertEqual(
                     archive.namelist(),
@@ -71,6 +76,17 @@ class PackageSkillsTests(unittest.TestCase):
                     ],
                 )
             checksum_lines = (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
+            checksum_filenames = [line.split("  ", 1)[1] for line in checksum_lines]
+            self.assertEqual(
+                checksum_filenames,
+                [
+                    "abd-alpha-v1.2.3.skill",
+                    "abd-beta-v1.2.3.skill",
+                    "abd-skills-v1.2.3.zip",
+                ],
+            )
+            self.assertEqual(len(checksum_filenames), len(set(checksum_filenames)))
+            self.assertNotIn("SHA256SUMS", checksum_filenames)
             for line in checksum_lines:
                 digest, filename = line.split("  ", 1)
                 self.assertEqual(hashlib.sha256((output / filename).read_bytes()).hexdigest(), digest)
@@ -100,6 +116,48 @@ class PackageSkillsTests(unittest.TestCase):
 
             self.assertEqual(artifacts, [])
             self.assertFalse(output.exists())
+
+    def test_replacement_failure_restores_existing_output_and_cleans_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_skill(root, "abd-alpha")
+            output = root / "dist"
+            output.mkdir()
+            (output / "last-good.txt").write_text("last good\n", encoding="utf-8")
+            real_replace = __import__("os").replace
+
+            def fail_stage_publish(source: Path, destination: Path) -> None:
+                if Path(destination) == output and Path(source).name == "dist":
+                    raise OSError("injected publish failure")
+                real_replace(source, destination)
+
+            with mock.patch("package_skills.os.replace", side_effect=fail_stage_publish):
+                with self.assertRaisesRegex(OSError, "injected publish failure"):
+                    build_packages(root, output, "v1.0.0")
+
+            self.assertEqual((output / "last-good.txt").read_text(encoding="utf-8"), "last good\n")
+            self.assertEqual(list(root.glob(".dist.backup-*")), [])
+
+    def test_rejects_symlinked_source_outside_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_skill(root, "abd-alpha")
+            outside = root / "secret.txt"
+            outside.write_text("secret\n", encoding="utf-8")
+            link = root / "skills" / "abd-alpha" / "references" / "secret.md"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks are not supported")
+
+            with self.assertRaisesRegex(PackagingError, "symlink.*references/secret.md"):
+                build_packages(root, root / "dist", "v1.0.0")
+
+            link.unlink()
+            directory_link = root / "skills" / "abd-alpha" / "linked-references"
+            directory_link.symlink_to(root / "skills" / "abd-alpha" / "references", target_is_directory=True)
+            with self.assertRaisesRegex(PackagingError, "symlink.*linked-references"):
+                build_packages(root, root / "dist", "v1.0.0")
 
     def test_validation_failure_does_not_publish(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
