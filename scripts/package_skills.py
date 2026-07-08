@@ -104,9 +104,11 @@ def build_packages(
     if errors:
         raise PackagingError("validation failed:\n" + "\n".join(f"- {error}" for error in errors))
     skills = discover_skills(root / "skills")
-    output.parent.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        output.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix=".package-", dir=output.parent) as temporary:
+    staging_parent = None if dry_run else output.parent
+    with tempfile.TemporaryDirectory(prefix=".package-", dir=staging_parent) as temporary:
         stage = Path(temporary) / "dist"
         stage.mkdir()
         archive_paths: list[Path] = []

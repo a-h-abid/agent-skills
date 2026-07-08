@@ -134,6 +134,19 @@ class ValidateCollectionTests(unittest.TestCase):
             self.assertTrue(any("references/missing.md" in error and "does not exist" in error for error in errors))
             self.assertTrue(any("../../secret.md" in error and "escapes skill directory" in error for error in errors))
 
+    def test_accepts_remote_links_with_varied_uri_forms(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = write_skill(root)
+            (skill / "README.md").write_text(
+                "[secure](HTTPS://example.com/guide)\n"
+                "[ftp](ftp://example.com/archive)\n"
+                "[network path](//cdn.example.com/asset)\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(validate_collection(root), [])
+
     def test_reports_missing_or_empty_skills_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             errors = validate_collection(Path(directory))

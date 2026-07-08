@@ -117,6 +117,17 @@ class PackageSkillsTests(unittest.TestCase):
             self.assertEqual(artifacts, [])
             self.assertFalse(output.exists())
 
+    def test_dry_run_does_not_create_nested_output_parents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_skill(root, "abd-alpha")
+            output = root / "missing" / "nested" / "dist"
+
+            artifacts = build_packages(root, output, "v1.0.0", dry_run=True)
+
+            self.assertEqual(artifacts, [])
+            self.assertFalse((root / "missing").exists())
+
     def test_replacement_failure_restores_existing_output_and_cleans_backup(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

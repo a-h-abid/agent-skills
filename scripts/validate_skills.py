@@ -5,13 +5,13 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 SKILL_PREFIX = "abd-"
 REQUIRED_FILES = ("SKILL.md", "README.md")
 KEY_VALUE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
 RESOURCE_REFERENCE = re.compile(r"`((?:references|scripts|assets)/[^`\s|]+)`")
 MARKDOWN_LINK = re.compile(r"\[[^]]*\]\(([^)]+)\)")
-REMOTE_SCHEMES = ("http://", "https://", "mailto:", "data:")
 
 
 class FrontmatterError(ValueError):
@@ -62,7 +62,8 @@ def local_references(source: Path) -> set[str]:
     references = set(RESOURCE_REFERENCE.findall(text))
     for raw_target in MARKDOWN_LINK.findall(text):
         target = raw_target.strip().split(maxsplit=1)[0].strip("<>")
-        if not target or target.startswith("#") or target.startswith(REMOTE_SCHEMES):
+        parsed = urlsplit(target)
+        if not target or target.startswith("#") or parsed.scheme or parsed.netloc:
             continue
         references.add(target.split("#", 1)[0])
     return references
