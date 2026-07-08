@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
+import socket
 import unittest
+import urllib.error
+import urllib.request
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills" / "abd-jira-cloud" / "scripts" / "jira.py"
@@ -91,6 +96,105 @@ class FieldParsingTests(unittest.TestCase):
         for value in ("summary", "=value"):
             with self.subTest(value=value), self.assertRaises(jira.JiraError):
                 jira.parse_kv_json([value])
+
+
+class FakeResponse:
+    def __init__(self, body=b"", status=200):
+        self.body = body
+        self.status = status
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self):
+        return self.body
+
+
+class TransportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.cfg = jira.Config(
+            {
+                "JIRA_BASE_URL": "https://example.atlassian.net",
+                "JIRA_EMAIL": "person@example.com",
+                "JIRA_API_TOKEN": "SENTINEL_API_TOKEN",
+            }
+        )
+
+    def test_dry_run_redacts_token_and_emits_one_json_value(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = jira.request("GET", "/rest/api/3/myself", self.cfg, dry_run=True)
+        document = json.loads(output.getvalue())
+        self.assertIsNone(result)
+        self.assertEqual(document["headers"]["Authorization"], "Basic <redacted>")
+        self.assertNotIn("SENTINEL_API_TOKEN", output.getvalue())
+
+    def test_live_request_uses_timeout_and_parses_json(self) -> None:
+        with mock.patch.object(
+            jira.HTTP_OPENER, "open", return_value=FakeResponse(b'{"ok":true}')
+        ) as opened:
+            self.assertEqual(jira.request("GET", "/rest/api/3/myself", self.cfg), {"ok": True})
+        self.assertEqual(opened.call_args.kwargs["timeout"], 30)
+
+    def test_empty_success_returns_empty_object(self) -> None:
+        with mock.patch.object(jira.HTTP_OPENER, "open", return_value=FakeResponse()):
+            self.assertEqual(jira.request("PUT", "/rest/api/3/issue/ABC-1", self.cfg), {})
+
+    def test_http_error_is_bounded_redacted_and_reports_retry_after(self) -> None:
+        body = ("SENTINEL_API_TOKEN" + "x" * (jira.ERROR_BODY_LIMIT + 10)).encode()
+        error = urllib.error.HTTPError(
+            "https://example.atlassian.net/rest/api/3/search/jql",
+            429,
+            "Too Many Requests",
+            {"Retry-After": "7"},
+            io.BytesIO(body),
+        )
+        with mock.patch.object(jira.HTTP_OPENER, "open", side_effect=error):
+            with self.assertRaises(jira.JiraError) as raised:
+                jira.request("POST", "/rest/api/3/search/jql", self.cfg)
+        message = str(raised.exception)
+        self.assertIn("Retry-After: 7", message)
+        self.assertIn("[truncated]", message)
+        self.assertNotIn("SENTINEL_API_TOKEN", message)
+
+    def test_timeout_and_malformed_json_become_jira_errors(self) -> None:
+        for effect in (
+            socket.timeout("slow"),
+            urllib.error.URLError("dns failure"),
+            FakeResponse(b"not-json"),
+        ):
+            with self.subTest(effect=type(effect).__name__):
+                context = (
+                    mock.patch.object(jira.HTTP_OPENER, "open", side_effect=effect)
+                    if isinstance(effect, Exception)
+                    else mock.patch.object(jira.HTTP_OPENER, "open", return_value=effect)
+                )
+                with context, self.assertRaises(jira.JiraError):
+                    jira.request("GET", "/rest/api/3/myself", self.cfg)
+
+    def test_redirect_policy_rejects_cross_origin_and_downgrade(self) -> None:
+        handler = jira.SameOriginRedirectHandler()
+        request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")
+        for destination in (
+            "https://evil.test/steal",
+            "http://example.atlassian.net/steal",
+        ):
+            with self.subTest(destination=destination), self.assertRaises(jira.JiraError):
+                handler.redirect_request(request, None, 302, "Found", {}, destination)
+
+    def test_redirect_policy_allows_same_origin_https(self) -> None:
+        handler = jira.SameOriginRedirectHandler()
+        request = urllib.request.Request("https://example.atlassian.net/rest/api/3/myself")
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "/rest/api/3/myself?moved=1"
+        )
+        self.assertEqual(
+            redirected.full_url,
+            "https://example.atlassian.net/rest/api/3/myself?moved=1",
+        )
 
 
 if __name__ == "__main__":

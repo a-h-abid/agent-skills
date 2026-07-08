@@ -19,6 +19,7 @@ import argparse
 import base64
 import json
 import os
+import socket
 import sys
 from typing import Mapping, Optional
 import urllib.error
@@ -104,40 +105,70 @@ class Config:
         return "Basic " + base64.b64encode(raw).decode("ascii")
 
 
+def _origin(url):
+    parsed = urllib.parse.urlsplit(url)
+    port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), port
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        destination = urllib.parse.urljoin(req.full_url, newurl)
+        if _origin(destination) != _origin(req.full_url) or _origin(destination)[0] != "https":
+            raise JiraError("Refusing an unsafe cross-origin or non-HTTPS redirect.")
+        return super().redirect_request(req, fp, code, msg, headers, destination)
+
+
+HTTP_OPENER = urllib.request.build_opener(SameOriginRedirectHandler())
+
+
+def _redact(text, cfg):
+    return text.replace(cfg.token, "<redacted>") if cfg.token else text
+
+
 def request(method, path, cfg, query=None, body=None, dry_run=False):
-    """Send one HTTP request and return the parsed JSON (or {} for empty 2xx)."""
     cfg.require(live=not dry_run)
     url = cfg.base_url + path
     if query:
-        url += "?" + urllib.parse.urlencode(query)
+        url += "?" + urllib.parse.urlencode(query, doseq=True)
 
-    headers = {"Accept": "application/json", "Authorization": cfg.auth_header()}
+    authorization = "Basic <redacted>" if dry_run else cfg.auth_header()
+    headers = {"Accept": "application/json", "Authorization": authorization}
     data = None
     if body is not None:
-        data = json.dumps(body).encode()
+        data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
 
     if dry_run:
-        shown = dict(headers)
-        shown["Authorization"] = "Basic <redacted>"
-        print(
-            json.dumps(
-                {"method": method, "url": url, "headers": shown, "body": body},
-                indent=2,
-            )
-        )
+        emit({"method": method, "url": url, "headers": headers, "body": body})
         return None
 
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req) as resp:
-            raw = resp.read().decode()
-            return json.loads(raw) if raw.strip() else {}
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="replace")
-        raise JiraError(f"HTTP {e.code} on {method} {path}\n{detail}") from None
-    except urllib.error.URLError as e:
-        raise JiraError(f"Could not reach {url}: {e.reason}") from None
+        with HTTP_OPENER.open(req, timeout=REQUEST_TIMEOUT) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as error:
+        raw = error.read(ERROR_BODY_LIMIT + 1)
+        truncated = len(raw) > ERROR_BODY_LIMIT
+        detail = raw[:ERROR_BODY_LIMIT].decode("utf-8", errors="replace")
+        detail = _redact(detail, cfg)
+        lines = [f"HTTP {error.code} on {method} {path}"]
+        retry_after = error.headers.get("Retry-After") if error.headers else None
+        if retry_after:
+            lines.append(f"Retry-After: {retry_after}")
+        if detail:
+            lines.append(detail + ("\n[truncated]" if truncated else ""))
+        raise JiraError("\n".join(lines)) from None
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as error:
+        reason = getattr(error, "reason", error)
+        raise JiraError(f"Could not reach {cfg.base_url}: {reason}") from None
+
+    if not raw.strip():
+        return {}
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise JiraError(f"Jira returned invalid JSON: {error}.") from None
 
 
 # --------------------------------------------------------------------------- #
@@ -220,7 +251,9 @@ def parse_kv_json(pairs):
 # Commands
 # --------------------------------------------------------------------------- #
 def cmd_whoami(args, cfg):
-    emit(request("GET", f"{API}/myself", cfg, dry_run=args.dry_run) or {})
+    result = request("GET", f"{API}/myself", cfg, dry_run=args.dry_run)
+    if result is not None:
+        emit(result)
 
 
 def cmd_get(args, cfg):
