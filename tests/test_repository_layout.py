@@ -13,6 +13,10 @@ REQUIRED = (
     "README.md",
     "skills/abd-code-review/SKILL.md",
     "skills/abd-code-review/README.md",
+    "skills/abd-jira-cloud/SKILL.md",
+    "skills/abd-jira-cloud/README.md",
+    "skills/abd-jira-cloud/scripts/jira.py",
+    "skills/abd-jira-cloud/references/api-notes.md",
 )
 OBSOLETE = (
     ".agents",
@@ -25,20 +29,36 @@ OBSOLETE = (
 )
 
 
+def tracked_paths() -> set[str]:
+    output = subprocess.run(
+        ["git", "ls-files"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return set(output.splitlines())
+
+
 class RepositoryLayoutTests(unittest.TestCase):
     def test_required_files_exist(self) -> None:
         for relative in REQUIRED:
             with self.subTest(relative=relative):
                 self.assertTrue((ROOT / relative).is_file(), relative)
 
-    def test_obsolete_paths_are_absent(self) -> None:
+    def test_obsolete_paths_are_not_tracked(self) -> None:
+        tracked = tracked_paths()
         for relative in OBSOLETE:
             with self.subTest(relative=relative):
-                self.assertFalse((ROOT / relative).exists(), relative)
+                self.assertFalse(
+                    any(path == relative or path.startswith(relative + "/") for path in tracked),
+                    relative,
+                )
 
-    def test_root_readme_catalog_links_to_skill_readme(self) -> None:
+    def test_root_readme_catalog_links_to_skill_readmes(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("[abd-code-review](skills/abd-code-review/README.md)", readme)
+        self.assertIn("[abd-jira-cloud](skills/abd-jira-cloud/README.md)", readme)
 
     def test_repository_has_one_git_root_on_main(self) -> None:
         nested = [path for path in ROOT.rglob(".git") if path != ROOT / ".git"]

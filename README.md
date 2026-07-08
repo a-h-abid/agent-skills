@@ -7,6 +7,7 @@ An agent-agnostic collection of reusable engineering skills for private use and 
 | Skill | Purpose |
 |---|---|
 | [abd-code-review](skills/abd-code-review/README.md) | Deep, evidence-based review of diffs, pull requests, branches, commits, and selected files. |
+| [abd-jira-cloud](skills/abd-jira-cloud/README.md) | Secure Jira Cloud issue reads, JQL search, creation, comments, updates, transitions, assignees, and watchers. |
 
 ## Install
 
