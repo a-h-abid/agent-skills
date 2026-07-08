@@ -47,9 +47,12 @@ def validate_base_url(value: str) -> str:
     except ValueError as error:
         raise JiraError(f"Invalid JIRA_BASE_URL: {error}.") from None
     hostname = (parsed.hostname or "").lower()
+    site_name = hostname[: -len(".atlassian.net")] if hostname.endswith(".atlassian.net") else ""
     if parsed.scheme.lower() != "https":
         raise JiraError("JIRA_BASE_URL must use HTTPS.")
     if not hostname.endswith(".atlassian.net"):
+        raise JiraError("JIRA_BASE_URL must be an HTTPS *.atlassian.net site URL.")
+    if not site_name or site_name.endswith("."):
         raise JiraError("JIRA_BASE_URL must be an HTTPS *.atlassian.net site URL.")
     if parsed.username is not None or parsed.password is not None:
         raise JiraError("JIRA_BASE_URL must not contain credentials.")
@@ -103,6 +106,7 @@ class Config:
 
 def request(method, path, cfg, query=None, body=None, dry_run=False):
     """Send one HTTP request and return the parsed JSON (or {} for empty 2xx)."""
+    cfg.require(live=not dry_run)
     url = cfg.base_url + path
     if query:
         url += "?" + urllib.parse.urlencode(query)
@@ -124,7 +128,6 @@ def request(method, path, cfg, query=None, body=None, dry_run=False):
         )
         return None
 
-    cfg.require(live=not dry_run)
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req) as resp:

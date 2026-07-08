@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +29,8 @@ class ConfigurationTests(unittest.TestCase):
         values = (
             "http://example.atlassian.net",
             "https://atlassian.net",
+            "https://.atlassian.net",
+            "https://foo..atlassian.net",
             "https://example.atlassian.net.evil.test",
             "https://user:token@example.atlassian.net",
             "https://example.atlassian.net/jira",
@@ -49,6 +53,22 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(jira.issue_path("ABC/1"), "/rest/api/3/issue/ABC%2F1")
         with self.assertRaises(jira.JiraError):
             jira.path_segment("bad\nkey", "issue")
+
+    def test_dry_run_rejects_invalid_base_url_before_emitting_preview(self) -> None:
+        cfg = jira.Config(
+            {
+                "JIRA_BASE_URL": "https://.atlassian.net",
+                "JIRA_EMAIL": "user@example.com",
+                "JIRA_API_TOKEN": "token",
+            }
+        )
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            with self.assertRaisesRegex(
+                jira.JiraError, r"JIRA_BASE_URL must be an HTTPS \*\.atlassian\.net"
+            ):
+                jira.request("GET", "/rest/api/3/myself", cfg, dry_run=True)
+        self.assertEqual(stdout.getvalue(), "")
 
 
 class FieldParsingTests(unittest.TestCase):
