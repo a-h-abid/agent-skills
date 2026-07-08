@@ -379,7 +379,7 @@ git commit -m "feat: add skill collection validator"
 - Produces: `normalize_version(value: str) -> str`, `build_packages(root: Path, output: Path, version: str, dry_run: bool = False) -> list[Path]`, and a CLI with `--root`, `--output`, `--version`, and `--dry-run`.
 - Archive layout: individual archive `<skill>/<files>`; collection archive `skills/<skill>/<files>`.
 
-- [ ] **Step 1: Write the failing packager tests**
+- [x] **Step 1: Write the failing packager tests**
 
 Create `tests/test_package_skills.py`:
 
@@ -503,7 +503,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the packager tests and confirm the expected failure**
+- [x] **Step 2: Run the packager tests and confirm the expected failure**
 
 Run:
 
@@ -513,7 +513,7 @@ python3 -m unittest tests.test_package_skills -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'package_skills'`.
 
-- [ ] **Step 3: Implement deterministic staged packaging**
+- [x] **Step 3: Implement deterministic staged packaging**
 
 Create `scripts/package_skills.py`:
 
@@ -684,7 +684,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: Run packager tests and the full tooling suite**
+- [x] **Step 4: Run packager tests and the full tooling suite**
 
 Run:
 
@@ -695,7 +695,7 @@ python3 -m unittest discover -s tests -v
 
 Expected: 10 tests pass.
 
-- [ ] **Step 5: Commit the packager**
+- [x] **Step 5: Commit the packager**
 
 ```bash
 git add scripts/package_skills.py tests/test_package_skills.py
