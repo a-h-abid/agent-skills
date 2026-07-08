@@ -71,7 +71,7 @@
 - Produces: `discover_skills(skills_root: Path) -> list[Path]`, `validate_collection(root: Path) -> list[str]`, and CLI exit status `0` for valid or `1` for invalid.
 - Error strings use `<relative-path>: <problem>; expected <correction>` so CI output is actionable.
 
-- [ ] **Step 1: Rename the initialized root branch**
+- [x] **Step 1: Rename the initialized root branch**
 
 Run:
 
@@ -82,7 +82,7 @@ git branch --show-current
 
 Expected: `main`.
 
-- [ ] **Step 2: Write the failing validator tests**
+- [x] **Step 2: Write the failing validator tests**
 
 Create `tests/test_validate_skills.py`:
 
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 3: Run the validator tests and confirm the expected failure**
+- [x] **Step 3: Run the validator tests and confirm the expected failure**
 
 Run:
 
@@ -185,7 +185,7 @@ python3 -m unittest tests.test_validate_skills -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'validate_skills'`.
 
-- [ ] **Step 4: Implement the validator**
+- [x] **Step 4: Implement the validator**
 
 Create `scripts/validate_skills.py`:
 
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 5: Run the validator tests and check the CLI syntax**
+- [x] **Step 5: Run the validator tests and check the CLI syntax**
 
 Run:
 
@@ -357,7 +357,7 @@ python3 scripts/validate_skills.py --help
 
 Expected: 5 tests pass; help output includes `--root`.
 
-- [ ] **Step 6: Commit the validator**
+- [x] **Step 6: Commit the validator**
 
 ```bash
 git add scripts/validate_skills.py tests/test_validate_skills.py
