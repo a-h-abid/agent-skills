@@ -1190,7 +1190,7 @@ git commit -m "ci: validate and package tagged releases"
 - Consumes: the completed repository.
 - Produces: fresh evidence for every acceptance criterion without creating a Git tag or GitHub Release.
 
-- [ ] **Step 1: Run the complete test and validation suite**
+- [x] **Step 1: Run the complete test and validation suite**
 
 Run:
 
@@ -1208,7 +1208,7 @@ abd-code-review-v1.0.0.skill
 abd-skills-v1.0.0.zip
 ```
 
-- [ ] **Step 2: Independently verify checksums and archive layouts**
+- [x] **Step 2: Independently verify checksums and archive layouts**
 
 Run:
 
@@ -1222,7 +1222,7 @@ cd ..
 
 Expected: both checksum lines report `OK`; the individual archive has one `abd-code-review/` root; the collection archive has one `skills/` root.
 
-- [ ] **Step 3: Verify cleanup, Git scope, and ignored artifacts**
+- [x] **Step 3: Verify cleanup, Git scope, and ignored artifacts**
 
 Run:
 
@@ -1238,7 +1238,7 @@ git status --short --branch
 
 Expected: all assertions exit `0`; `dist` is ignored; status shows branch `main` with no uncommitted source changes.
 
-- [ ] **Step 4: Remove local smoke artifacts and confirm a clean worktree**
+- [x] **Step 4: Remove local smoke artifacts and confirm a clean worktree**
 
 Run:
 
