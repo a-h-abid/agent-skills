@@ -1,8 +1,10 @@
 # Full Codebase Audit and Remediation Roadmap Design
 
 **Date:** 2026-07-10
-**Status:** Approved
+**Last revised:** 2026-07-11
+**Status:** Approved design, revised after review
 **Repository:** `agent-skills`
+**Audit target:** `8605a17c906d715c58b9c1a2511b8d0079446a4a`
 
 ## Context
 
@@ -13,10 +15,10 @@ are instructions consumed by agents, packaged archives cross a software supply
 chain boundary, and the Jira skill can read local input, use credentials, call
 an external service, and perform remote mutations.
 
-The initial project exploration found 42 tracked files and two published skills.
-The documented baseline is currently green: 54 unit tests pass, skill validation
-passes, and the packaging dry run passes. Those results establish a starting
-point; they do not replace file coverage or security validation.
+The pinned audit tree contains 40 tracked files and two published skills. Its
+documented baseline is green: 54 unit tests pass, skill validation passes, and
+the packaging dry run passes. Those results establish a starting point; they do
+not replace file coverage or security validation.
 
 ## Goal
 
@@ -39,10 +41,25 @@ The audit covers:
 - current ignored or generated files only when their presence can change
   validation, packaging, or publication behavior.
 
-Historical specifications, implementation plans, and tracked model/task reports
-are contextual inputs and repository-hygiene evidence. They are not reviewed line
-by line as production behavior, but contradictions are reported when they make a
-current public contract, security claim, or operational instruction inaccurate.
+The canonical inventory is generated from commit
+`8605a17c906d715c58b9c1a2511b8d0079446a4a` with
+`git ls-tree -r --name-only <commit>`. File counts, source evidence, and line
+references resolve against that immutable tree. Later commits or working-tree
+changes are recorded in the audit report as drift and are not silently absorbed
+into scope. Audit-control documents created after the pin are administrative
+outputs rather than additions to the audited tree unless the user explicitly
+repins the audit.
+
+At audit start, ignored and generated entries are enumerated with
+`git status --ignored --porcelain` and expanded with
+`git ls-files --others --ignored --exclude-standard`. Each entry that could alter
+validation, packaging, or publication receives an included or not-applicable
+disposition with a reason in the coverage inventory.
+
+Historical specifications and implementation plans are contextual inputs. They
+are not reviewed line by line as production behavior, but contradictions are
+reported when they make a current public contract, security claim, or operational
+instruction inaccurate.
 
 The audit does not:
 
@@ -74,7 +91,9 @@ and consistency.
 
 ### 3. Security
 
-Use the standard repository security workflow with distinct phases:
+Use the Codex Security plugin version `0.1.11` standard repository-scan skill,
+`codex-security:security-scan`. Its `skills/security-scan/SKILL.md` workflow and
+`references/scan-artifacts.md` artifact contract define these distinct phases:
 
 1. repository threat model;
 2. candidate-finding discovery;
@@ -114,6 +133,12 @@ tracked-file inventory
   -> audit report
   -> remediation roadmap
 ```
+
+The canonical tracked-file inventory and its per-file review receipts live in the
+main audit report's `Coverage Inventory` appendix. The appendix contains one row
+for each file in the pinned tree, plus dispositions for relevant ignored or
+generated entries. It links to the security coverage ledger for deeper
+surface-level receipts rather than duplicating that evidence.
 
 Each candidate records:
 
@@ -164,8 +189,8 @@ The audit will:
 - re-run `python3 -m unittest discover -s tests -v`;
 - re-run `python3 scripts/validate_skills.py`;
 - re-run `python3 scripts/package_skills.py --version v0.0.0 --dry-run`;
-- use targeted, non-destructive tests or temporary-directory proofs for suspected
-  defects;
+- use targeted, non-destructive tests or proofs created under the system temporary
+  directory for suspected defects; these proofs are not added to the repository;
 - use safe security proofs without live Jira mutation or release publication;
 - inspect repository history where intent affects a finding; and
 - verify current external contracts against authoritative sources only when a
@@ -191,6 +216,7 @@ unrelated working-tree changes, if any appear, are preserved.
 1. `docs/audits/2026-07-10-codebase-audit.md`
    - executive verdict;
    - scope and coverage overview;
+   - a `Coverage Inventory` appendix containing per-file receipts;
    - findings ordered by severity;
    - exact evidence and validation;
    - limitations and deferred items; and
@@ -201,20 +227,37 @@ unrelated working-tree changes, if any appear, are preserved.
    - effort estimates;
    - acceptance criteria; and
    - verification commands.
-3. The security workflow's required scan artifacts, referenced from the main
-   audit report rather than duplicated.
+3. A `codex-security:security-scan` bundle under
+   `<system-temp>/codex-security-scans/agent-skills/<scan_id>/`, referenced from
+   the main audit report rather than duplicated. Its verifiable contents are:
+   - canonical `scan-manifest.json`, `findings.json`, and `coverage.json` files;
+   - the deterministically generated `report.md`;
+   - `artifacts/01_context/security_guidance.md` and `threat_model.md`;
+   - `artifacts/02_discovery/finding_discovery_report.md` plus applicable ranking,
+     work-ledger, and raw-candidate artifacts;
+   - `artifacts/03_coverage/repository_coverage_ledger.md` and
+     `reviewed_surfaces.md` when applicable;
+   - applicable deduplication outputs under `artifacts/04_reconciliation/`;
+   - candidate ledgers and required validation and attack-path reports under
+     `artifacts/05_findings/`; and
+   - detailed finding write-ups, proofs, and the hardening portfolio when
+     reportable findings exist.
 
 ## Completion Criteria
 
 The work is complete only when:
 
-- every in-scope tracked file has a review receipt or an explicit contextual or
-  not-applicable disposition;
+- the audit report identifies the pinned target commit and records any later
+  repository drift;
+- the `Coverage Inventory` appendix contains a receipt or explicit contextual or
+  not-applicable disposition for each of the 40 files in the pinned tree and each
+  relevant ignored or generated entry;
 - every discovered candidate is reportable, suppressed, not applicable, or
   deferred with an exact reason;
 - every reportable security issue has validation and attack-path evidence;
+- the required security-scan bundle is finalized and linked from the main report;
 - documented baseline checks have been rerun and their results recorded;
-- both deliverables are written and internally consistent;
+- the audit report and remediation roadmap are written and internally consistent;
 - roadmap entries trace back to findings or explicitly labeled hardening goals;
   and
 - no product-code or external-system mutation has occurred.
