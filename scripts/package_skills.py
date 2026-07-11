@@ -30,8 +30,13 @@ def normalize_version(value: str) -> str:
     return "v" + ".".join(match.groups())
 
 
+def _is_ignorable(path: Path, skill: Path) -> bool:
+    parts = path.relative_to(skill).parts
+    return "__pycache__" in parts or path.suffix in (".pyc", ".pyo")
+
+
 def source_files(skill: Path) -> list[Path]:
-    paths = list(skill.rglob("*"))
+    paths = [path for path in skill.rglob("*") if not _is_ignorable(path, skill)]
     for path in paths:
         if path.is_symlink():
             relative = path.relative_to(skill).as_posix()
