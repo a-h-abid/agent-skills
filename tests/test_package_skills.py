@@ -181,6 +181,51 @@ class PackageSkillsTests(unittest.TestCase):
 
             self.assertFalse(output.exists())
 
+    def test_excludes_bytecode_artifacts_from_archives(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_skill(root, "abd-alpha")
+            skill = root / "skills" / "abd-alpha"
+            cache = skill / "scripts" / "__pycache__"
+            cache.mkdir(parents=True)
+            (cache / "x.cpython-312.pyc").write_bytes(b"\x00fake bytecode")
+            (skill / "references" / "stale.pyo").write_bytes(b"\x00stale bytecode")
+            output = root / "dist"
+
+            build_packages(root, output, "v1.0.0")
+
+            members: list[str] = []
+            for archive_name in ("abd-alpha-v1.0.0.skill", "abd-skills-v1.0.0.zip"):
+                with zipfile.ZipFile(output / archive_name) as archive:
+                    members.extend(archive.namelist())
+            forbidden = [
+                name
+                for name in members
+                if "__pycache__" in name.split("/") or name.endswith((".pyc", ".pyo"))
+            ]
+            self.assertEqual(forbidden, [])
+
+    def test_ignores_symlinks_inside_bytecode_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_skill(root, "abd-alpha")
+            outside = root / "secret.txt"
+            outside.write_text("secret\n", encoding="utf-8")
+            cache = root / "skills" / "abd-alpha" / "__pycache__"
+            cache.mkdir()
+            try:
+                (cache / "link.pyc").symlink_to(outside)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks are not supported")
+
+            build_packages(root, root / "dist", "v1.0.0")
+
+            with zipfile.ZipFile(root / "dist" / "abd-alpha-v1.0.0.skill") as archive:
+                self.assertEqual(
+                    [name for name in archive.namelist() if "__pycache__" in name.split("/")],
+                    [],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

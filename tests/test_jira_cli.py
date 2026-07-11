@@ -285,7 +285,7 @@ class CommandBehaviorTests(unittest.TestCase):
         calls = []
         queue = list(responses)
 
-        def fake_request(method, path, cfg, query=None, body=None, dry_run=False):
+        def fake_request(method, path, cfg, query=None, body=None, dry_run=False, unverified_identity=False):
             calls.append((method, path, query, body, dry_run))
             return queue.pop(0)
 
@@ -441,6 +441,45 @@ class CommandBehaviorTests(unittest.TestCase):
             self.assertEqual(jira.main(["--dry-run", "transition", "ABC-1", "--to", "Done"]), 0)
         document = json.loads(output.getvalue())
         self.assertEqual(document["body"]["transition"]["id"], "<resolved:Done>")
+
+
+class DryRunIdentityResolutionTests(unittest.TestCase):
+    ENV = {"JIRA_BASE_URL": "https://example.atlassian.net"}
+
+    def _dry_run(self, argv: list[str]) -> dict:
+        output = io.StringIO()
+        with mock.patch.dict(jira.os.environ, self.ENV, clear=True), mock.patch.object(
+            jira.HTTP_OPENER, "open", side_effect=AssertionError("network call in dry-run")
+        ) as opened, redirect_stdout(output):
+            self.assertEqual(jira.main(["--dry-run", *argv]), 0)
+        self.assertEqual(opened.call_count, 0)
+        # json.loads raises on trailing data, so this also asserts the
+        # one-JSON-value-per-preview output contract.
+        return json.loads(output.getvalue())
+
+    def test_email_assign_and_watch_dry_runs_are_not_mistaken_for_verified_identity_resolution(self) -> None:
+        flagged = (
+            ["assign", "ABC-1", "--email", "person@example.com"],
+            ["watch", "ABC-1", "--email", "person@example.com"],
+            ["watch", "ABC-1", "--email", "person@example.com", "--remove"],
+        )
+        for argv in flagged:
+            with self.subTest(argv=argv):
+                document = self._dry_run(argv)
+                self.assertEqual(
+                    document["identity_resolution"], "not verified in dry-run"
+                )
+
+        unflagged = (
+            ["assign", "ABC-1", "--account-id", "acct"],
+            ["assign", "ABC-1", "--unassign"],
+            ["watch", "ABC-1", "--account-id", "acct"],
+            ["watch", "ABC-1", "--account-id", "acct", "--remove"],
+        )
+        for argv in unflagged:
+            with self.subTest(argv=argv):
+                document = self._dry_run(argv)
+                self.assertNotIn("identity_resolution", document)
 
 
 if __name__ == "__main__":

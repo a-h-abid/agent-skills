@@ -134,7 +134,7 @@ def _redact(text, cfg):
     return text.replace(cfg.token, "<redacted>") if cfg.token else text
 
 
-def request(method, path, cfg, query=None, body=None, dry_run=False):
+def request(method, path, cfg, query=None, body=None, dry_run=False, unverified_identity=False):
     cfg.require(live=not dry_run)
     url = cfg.base_url + path
     if query:
@@ -148,7 +148,10 @@ def request(method, path, cfg, query=None, body=None, dry_run=False):
         headers["Content-Type"] = "application/json"
 
     if dry_run:
-        emit({"method": method, "url": url, "headers": headers, "body": body})
+        preview = {"method": method, "url": url, "headers": headers, "body": body}
+        if unverified_identity:
+            preview["identity_resolution"] = "not verified in dry-run"
+        emit(preview)
         return None
 
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
@@ -435,26 +438,31 @@ def cmd_transition(args, cfg):
 
 
 def cmd_assign(args, cfg):
+    email_resolved = False
     if args.unassign:
         account_id = None
     elif args.account_id:
         account_id = args.account_id
     elif args.email:
         account_id = resolve_account_id(cfg, args.email, dry_run=args.dry_run)
+        email_resolved = args.dry_run
     else:
         raise JiraError("Pass one of --email, --account-id, or --unassign.")
     res = request(
         "PUT", issue_path(args.key, "/assignee"), cfg,
         body={"accountId": account_id}, dry_run=args.dry_run,
+        unverified_identity=email_resolved,
     )
     if res is not None:  # 204 on success
         emit({"assigned": args.key, "accountId": account_id})
 
 
 def cmd_watch(args, cfg):
+    email_resolved = False
     account_id = args.account_id
     if account_id is None and args.email:
         account_id = resolve_account_id(cfg, args.email, dry_run=args.dry_run)
+        email_resolved = args.dry_run
     # Add-watcher takes the accountId as the RAW json body (a bare string),
     # not an object. Remove uses a query param instead.
     if args.remove:
@@ -463,6 +471,7 @@ def cmd_watch(args, cfg):
         res = request(
             "DELETE", issue_path(args.key, "/watchers"), cfg,
             query={"accountId": account_id}, dry_run=args.dry_run,
+            unverified_identity=email_resolved,
         )
         if res is not None:
             emit({"removed_watcher": account_id, "issue": args.key})
@@ -472,6 +481,7 @@ def cmd_watch(args, cfg):
     res = request(
         "POST", issue_path(args.key, "/watchers"), cfg,
         body=account_id, dry_run=args.dry_run,
+        unverified_identity=email_resolved,
     )
     if res is not None:
         emit({"added_watcher": account_id, "issue": args.key})
