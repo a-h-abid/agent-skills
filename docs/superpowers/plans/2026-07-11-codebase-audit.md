@@ -214,7 +214,7 @@ Task 8 writes one row per security candidate with these exact keys: `audit_id`, 
 - Consumes: current repository path and immutable target `8605a17c906d715c58b9c1a2511b8d0079446a4a`.
 - Produces: the persisted audit context and exact 40-path inventory consumed by every later task.
 
-- [ ] **Step 1: Capture the live repository identity before audit writes**
+- [x] **Step 1: Capture the live repository identity before audit writes**
 
 Run from the live repository:
 
@@ -248,7 +248,7 @@ fi
 
 Expected: the context file exists, names the full target SHA, and preserves the original source HEAD and UTC audit-start time across resumed tasks.
 
-- [ ] **Step 2: Snapshot drift and ignored/generated state**
+- [x] **Step 2: Snapshot drift and ignored/generated state**
 
 Run:
 
@@ -262,7 +262,7 @@ git -C "$SOURCE_REPO" diff --stat "$AUDIT_TARGET"..HEAD > "$EVIDENCE_DIR/start/c
 
 Expected: the files record the source state without altering it. The current known drift is the post-pin revision of `docs/superpowers/specs/2026-07-10-codebase-audit-design.md`; execution must record whatever is actually present at audit start.
 
-- [ ] **Step 3: Create or validate the pinned local clone on branch main**
+- [x] **Step 3: Create or validate the pinned local clone on branch main**
 
 Run:
 
@@ -281,7 +281,7 @@ fi
 
 Expected: `HEAD` equals the full target SHA, the local branch is `main`, and the disposable clone is clean. The source repository's branches and worktree are untouched.
 
-- [ ] **Step 4: Generate and verify the canonical inventory**
+- [x] **Step 4: Generate and verify the canonical inventory**
 
 Run:
 
@@ -350,7 +350,7 @@ PY
 
 Expected: `verified exact pinned inventory: 40 unique paths`.
 
-- [ ] **Step 5: Verify the task produced administrative evidence only**
+- [x] **Step 5: Verify the task produced administrative evidence only**
 
 Run:
 
@@ -380,7 +380,7 @@ Expected: the pinned clone is clean, source HEAD has not moved, and source statu
 - Consumes: Task 1 context, ignored-file snapshot, and pinned checkout.
 - Produces: baseline receipts and one coverage row for every expanded ignored/generated entry; candidate IDs use the `AUD-CORE-` lane because packaging owns generated-content behavior.
 
-- [ ] **Step 1: Run all documented baseline commands and preserve failures**
+- [x] **Step 1: Run all documented baseline commands and preserve failures**
 
 Run:
 
@@ -413,7 +413,7 @@ run_check package-dry-run python3 scripts/package_skills.py --version v0.0.0 --d
 
 Documented expectation: 54 tests pass, two skills validate, and the packaging dry run passes. Record actual output even when it differs; a nonzero exit creates a validation candidate or explicit limitation rather than erasing coverage.
 
-- [ ] **Step 2: Inventory locally available static/workflow tools**
+- [x] **Step 2: Inventory locally available static/workflow tools**
 
 Run:
 
@@ -431,7 +431,7 @@ sed -n '1,40p' "$EVIDENCE_DIR/baseline/tools.tsv"
 
 Run an installed tool only when it can operate offline without adding configuration or dependencies. Record its exact invocation, exit status, and output under `$EVIDENCE_DIR/baseline/`; treat results as candidates requiring source validation.
 
-- [ ] **Step 3: Classify every audit-start ignored/generated file**
+- [x] **Step 3: Classify every audit-start ignored/generated file**
 
 Read `$EVIDENCE_DIR/start/ignored-status.txt` and `ignored-files.txt`. Write one `generated-coverage.jsonl` row per expanded path using the shared coverage schema:
 
@@ -442,7 +442,7 @@ At plan-authoring time, the live tree contains Python bytecode under `scripts/__
 
 Create empty `generated-coverage.jsonl` and `generated-candidates.jsonl` files even when the corresponding inventory or candidate set is empty, so later tasks can parse them without guessing whether work ran.
 
-- [ ] **Step 4: Run a non-destructive workflow-order package-composition proof**
+- [x] **Step 4: Run a non-destructive workflow-order package-composition proof**
 
 Run the CI order in a fresh temporary clone without suppressing bytecode, then inspect the produced Jira skill archive:
 
@@ -480,7 +480,7 @@ PY
 
 Expected: the proof prints the exact generated archive members observed after the real test/validate/package order. Promote the behavior only after checking packaging intent, public release claims, and downstream impact. Do not create bytecode or artifacts in the source repository or pinned clone.
 
-- [ ] **Step 5: Validate baseline receipts and clone cleanliness**
+- [x] **Step 5: Validate baseline receipts and clone cleanliness**
 
 Run:
 
@@ -515,27 +515,27 @@ Expected: each baseline has a log and status, every expanded ignored/generated f
 - Consumes: Task 1 inventory and Task 2 baseline/generated-content evidence.
 - Produces: exactly seven coverage rows and zero or more `AUD-CORE-NNN` candidates, continuing after any IDs reserved by Task 2.
 
-- [ ] **Step 1: Review the packaging boundary end to end**
+- [x] **Step 1: Review the packaging boundary end to end**
 
 Read `scripts/package_skills.py` and `tests/test_package_skills.py` in full at the pinned revision. Trace discovery, symlink checks, file selection, archive naming, permissions, timestamp normalization, checksum generation, dry-run behavior, replacement/rollback, and exception handling. Cross-check every public deterministic/package-purity claim against an assertion; record exact source/test line pairs.
 
-- [ ] **Step 2: Review the validation boundary end to end**
+- [x] **Step 2: Review the validation boundary end to end**
 
 Read `scripts/validate_skills.py` and `tests/test_validate_skills.py` in full. Check frontmatter parsing, folded/multiline scalar handling, reference extraction, path containment, symlink resolution, URI handling, unreadable/oversized inputs, discovery rules, and diagnostic contracts. Verify each accepted/rejected input class against tests or a safe proof.
 
-- [ ] **Step 3: Review repository-layout and workflow test strength**
+- [x] **Step 3: Review repository-layout and workflow test strength**
 
 Read `tests/test_repository_layout.py` and `tests/test_workflows.py` with their production consumers. Separate structural substring evidence from YAML semantics, action provenance, permissions, release behavior, and clean-checkout assumptions. Record gaps only when they leave a concrete contract or release risk unverified.
 
-- [ ] **Step 4: Review Jira tests as an offline trust-boundary harness**
+- [x] **Step 4: Review Jira tests as an offline trust-boundary harness**
 
 Read `tests/test_jira_cli.py` without re-reviewing Jira production behavior reserved for Task 4. Check sentinel credential handling, redirect and timeout mocks, bounded error bodies, pagination termination, command contracts, parser rejection, dry-run output, and whether tests can make network calls. Record test-quality candidates in this lane and behavior candidates in Task 4.
 
-- [ ] **Step 5: Validate each core candidate safely**
+- [x] **Step 5: Validate each core candidate safely**
 
 For each candidate, either cite an existing test and exact production line, create a minimal proof below `$EVIDENCE_DIR/proofs/AUD-CORE-NNN/` using an exported copy of the pinned tree, or close it as `suppressed`, `not applicable`, or `deferred` with exact counterevidence or missing proof. Never add a regression test or modify production code. Use `PYTHONDONTWRITEBYTECODE=1` and record each exact proof command in candidate JSON.
 
-- [ ] **Step 6: Write and validate the lane records**
+- [x] **Step 6: Write and validate the lane records**
 
 Write seven coverage JSON objects and all candidates using the shared schemas. Then run:
 
@@ -584,23 +584,23 @@ Expected: exactly seven unique files and parseable, lane-owned candidates.
 - Consumes: Task 2 baseline and Task 3 test-strength evidence.
 - Produces: exactly four coverage rows and zero or more `AUD-JIRA-NNN` candidates.
 
-- [ ] **Step 1: Review configuration and destination confinement**
+- [x] **Step 1: Review configuration and destination confinement**
 
 Trace `JIRA_BASE_URL` validation, hostname and port normalization, path-segment encoding, Basic-auth construction, redirect policy, request timeouts, token redaction, bounded HTTP diagnostics, JSON parsing, and error normalization from input to transport sink. Confirm every security statement against exact code and offline tests.
 
-- [ ] **Step 2: Review read and pagination behavior**
+- [x] **Step 2: Review read and pagination behavior**
 
 Trace `whoami`, `get`, `search`, `users`, and `watchers` through parser, request payload, pagination token handling, output emission, limits, and private-data exposure. Check empty/malformed response handling, repeated tokens, explicit `--all` behavior, result bounds, and request-field minimization.
 
-- [ ] **Step 3: Review every mutation and dry-run path**
+- [x] **Step 3: Review every mutation and dry-run path**
 
 Trace `create`, `comment`, `update`, `transition`, `assign`, and `watch`. Check single versus multi-step writes, ambiguous identity/transition resolution, ADF/file/stdin ingestion, payload precedence, write retry behavior, dry-run destination validation, secret redaction, and whether a preview can disclose issue content.
 
-- [ ] **Step 4: Reconcile all four public contracts**
+- [x] **Step 4: Reconcile all four public contracts**
 
 Build a matrix across frontmatter, `SKILL.md`, README, API notes, parser help, and implementation for supported commands, Python floor, dependency policy, auth mode, URL constraint, pagination bound, timeout, retry policy, sensitive-output handling, unsupported Jira variants, and mutation confirmation rules. A contradiction is a candidate only when it can mislead an agent or user concretely.
 
-- [ ] **Step 5: Validate without credentials or network**
+- [x] **Step 5: Validate without credentials or network**
 
 Run:
 
@@ -619,7 +619,7 @@ printf '%s\n' "$status" > "$EVIDENCE_DIR/reviews/jira-tests.exit"
 
 Use mocked or temporary-file proofs only. Do not run the documented live `whoami` smoke test. When a conclusion depends on current Atlassian behavior, use only linked official Atlassian documentation and record URL/access date.
 
-- [ ] **Step 6: Write and validate the lane records**
+- [x] **Step 6: Write and validate the lane records**
 
 Write four coverage JSON objects and candidate records, then run:
 
@@ -676,19 +676,19 @@ Expected: exactly four unique files and no live-call evidence.
 - Consumes: Task 1 inventory and Task 2 validation/package evidence.
 - Produces: exactly 16 coverage rows and zero or more `AUD-INSTR-NNN` candidates.
 
-- [ ] **Step 1: Review trigger, target-selection, and authorization behavior**
+- [x] **Step 1: Review trigger, target-selection, and authorization behavior**
 
 Read README and `SKILL.md` in full. Check when the skill triggers, what target it chooses without one, whether Git/GitHub commands match the claimed portability, whether reads and writes are clearly separated, and whether instructions can cause unintended repository or external mutation.
 
-- [ ] **Step 2: Review review-depth, evidence, and output contracts**
+- [x] **Step 2: Review review-depth, evidence, and output contracts**
 
 Check size-based coverage rules, confidence/severity calibration, source verification, call-site/history guidance, deduplication, limitations, line-reference accuracy, and the output template. Identify contradictions that could cause a missed defect, false accusation, secret exposure, or unsafe tool use.
 
-- [ ] **Step 3: Review every routing edge**
+- [x] **Step 3: Review every routing edge**
 
 Build a routing matrix from the `SKILL.md` signal table to all 14 reference files. Confirm each referenced path exists, every bundled reference is reachable for an appropriate signal, overlapping stacks load all necessary cross-cutting references, and README/catalog claims match the actual set.
 
-- [ ] **Step 4: Review all stack references in bounded batches**
+- [x] **Step 4: Review all stack references in bounded batches**
 
 Review:
 
@@ -698,11 +698,11 @@ Review:
 
 For each file, check advice for technical correctness, safety of suggested commands, outdated absolute claims, missing high-impact checks, duplicated/conflicting rules, and prompt-injection/confused-deputy resistance. A stack not used by this repository is still distributed executable instruction and receives a full instruction receipt, not a silent skip.
 
-- [ ] **Step 5: Validate current external claims only when necessary**
+- [x] **Step 5: Validate current external claims only when necessary**
 
 Use official language/framework/security documentation only when the finding depends on a temporally changeable contract. Record the exact claim, source URL, and UTC access date; otherwise keep the review offline.
 
-- [ ] **Step 6: Write and validate the lane records**
+- [x] **Step 6: Write and validate the lane records**
 
 Write 16 coverage JSON objects and candidate records, then run:
 
@@ -768,27 +768,27 @@ Expected: all 14 references plus README and `SKILL.md` have receipts.
 - Consumes: Task 2 baseline, Task 3 package/validator evidence, and Tasks 4-5 public-skill matrices.
 - Produces: exactly 13 coverage rows and zero or more `AUD-REL-NNN` candidates.
 
-- [ ] **Step 1: Review root public and policy contracts**
+- [x] **Step 1: Review root public and policy contracts**
 
 Cross-check README, CONTRIBUTING, CHANGELOG, LICENSE, `.gitattributes`, and `.gitignore` against actual supported skills, Python compatibility, validation commands, generated-file policy, installation layout, release artifacts, checksums, and licensing. Verify hidden files explicitly because ordinary file searches can omit them.
 
-- [ ] **Step 2: Review CI as a clean-checkout execution path**
+- [x] **Step 2: Review CI as a clean-checkout execution path**
 
 Trace checkout, Python setup, permissions, test order, validation, and package dry run. Determine what the substring workflow tests prove and what they do not. Check action references, untrusted pull-request behavior, generated files between steps, shell semantics, and least privilege.
 
-- [ ] **Step 3: Review release integrity end to end**
+- [x] **Step 3: Review release integrity end to end**
 
 Trace tag filtering, exact version validation, test/validation order, artifact build, archive composition, checksums, token exposure, `gh release create` arguments, tag verification, artifact provenance, overwrite behavior, and deterministic-build claims. Reuse Task 3 evidence instead of running a publishing command.
 
-- [ ] **Step 4: Give each historical document a contextual receipt**
+- [x] **Step 4: Give each historical document a contextual receipt**
 
 Read titles, goals, constraints, completion claims, and current-contract statements rather than line-reviewing every implementation snippet. Report only contradictions that make a present public contract, security claim, or operational instruction inaccurate. For the pinned audit design, record that the 2026-07-11 revision governs execution and appears as post-pin drift.
 
-- [ ] **Step 5: Check catalog-to-package completeness**
+- [x] **Step 5: Check catalog-to-package completeness**
 
 Compare direct skill directories, validator discovery, root catalog entries, README files, release collection members, changelog entries, and workflow upload glob. Record the exact set at each boundary and explain any mismatch.
 
-- [ ] **Step 6: Write and validate the lane records**
+- [x] **Step 6: Write and validate the lane records**
 
 Write 13 coverage JSON objects and candidate records, then run:
 
@@ -853,7 +853,7 @@ Expected: six root contracts, two workflows, and five contextual documents have 
 - Produces: one finalized standard repository-scan bundle and main-report crosswalk candidates with `AUD-SEC-NNN` IDs.
 - Path variables: `$CANDIDATE_ID` is the plugin-assigned candidate ID recorded in its ledger; `$SLUG` is the schema-valid finding slug recorded in `writeup.reportPath`; `$SCAN_ID` and `$SCAN_DIR` are returned by the top-level scan workflow.
 
-- [ ] **Step 1: Verify target and capability before substantive scan work**
+- [x] **Step 1: Verify target and capability before substantive scan work**
 
 Run the shared context block, verify the clone is clean and at the pinned commit, then invoke `codex-security:security-scan` version `0.1.11` for repository scope `.` at `$AUDIT_CHECKOUT`. Supply this exact user context:
 
@@ -863,27 +863,27 @@ Audit the immutable Git revision 8605a17c906d715c58b9c1a2511b8d0079446a4a. Prior
 
 Follow the skill's host routing and `security_scan` capability preflight. If version `0.1.11` or a required capability is blocked, stop this task with the exact preflight evidence; do not substitute a different version or claim completion.
 
-- [ ] **Step 2: Complete the repository threat model**
+- [x] **Step 2: Complete the repository threat model**
 
 Compile and read resolved security guidance, write the repository-scoped threat model, copy it unchanged to `artifacts/01_context/threat_model.md`, and end it with the plugin-required repository target identity and pinned version. Do not inspect ahead into later phase skills until the threat-model phase is complete.
 
-- [ ] **Step 3: Complete finding discovery and coverage closure**
+- [x] **Step 3: Complete finding discovery and coverage closure**
 
 Run the discovery phase against all 40 pinned files. Produce the ranked runtime-surface worklist and repository coverage ledger, close every applicable high-impact and seeded root-control row, and preserve raw candidate-local validation and attack-path facts before deduplication. Instruction files are executable behavior and remain in scan scope.
 
-- [ ] **Step 4: Complete candidate validation**
+- [x] **Step 4: Complete candidate validation**
 
 Validate every discovered candidate and every open seeded/root-control row. Each candidate must have a discovery receipt before validation and a validation receipt before later reporting. Use safe local proofs only; no Jira network call or release action.
 
-- [ ] **Step 5: Complete attack-path and severity analysis**
+- [x] **Step 5: Complete attack-path and severity analysis**
 
 For every candidate or closure row that reaches this phase, record entry point, controls, sink, reachability, concrete impact, policy/severity reasoning, and an attack-path receipt even when the final decision is suppression or deferral.
 
-- [ ] **Step 6: Assemble canonical JSON and finalize once**
+- [x] **Step 6: Assemble canonical JSON and finalize once**
 
 Assemble `scan-manifest.json`, `findings.json`, and `coverage.json` last. Generate one detailed vulnerability write-up per reportable finding and one hardening portfolio over the complete reportable set. Skip hardening and omit its manifest link when there are no reportable findings. Let the workflow finalizer generate `report.md`; never write it by hand.
 
-- [ ] **Step 7: Persist and verify the scan directory**
+- [x] **Step 7: Persist and verify the scan directory**
 
 Write the canonical absolute scan path returned by the workflow:
 
@@ -942,7 +942,7 @@ PY
 
 Expected: the manifest is completed, its target revision is the full pinned SHA, coverage is complete, and conditional finding artifacts exist.
 
-- [ ] **Step 8: Build the lossless main-report crosswalk**
+- [x] **Step 8: Build the lossless main-report crosswalk**
 
 Create one `AUD-SEC-NNN` candidate record for every plugin candidate requiring audit-level closure. Preserve canonical `findingId`, candidate IDs, severity, confidence, locations, ledger path, validation report, and attack-path report in `security_refs`. Independently derive main severity/confidence with written rationale and keep separately reachable sibling findings distinct.
 
@@ -964,7 +964,7 @@ Create one `AUD-SEC-NNN` candidate record for every plugin candidate requiring a
 - Consumes: Tasks 2-7 receipts, candidates, proofs, and canonical security output.
 - Produces: the only canonical inputs allowed for Tasks 9-10.
 
-- [ ] **Step 1: Prove the manual lanes form an exact partition**
+- [x] **Step 1: Prove the manual lanes form an exact partition**
 
 Run:
 
@@ -1001,15 +1001,15 @@ PY
 
 Expected: 40 unique manual receipts with no missing or duplicate path.
 
-- [ ] **Step 2: Normalize coverage without replacing file receipts with security surfaces**
+- [x] **Step 2: Normalize coverage without replacing file receipts with security surfaces**
 
 Concatenate the four pinned coverage ledgers and the generated-content ledger into `reconciliation/coverage.jsonl`. Preserve the security ledger as a linked surface-level artifact; do not turn its surface rows into file rows or use it to fill a missing manual receipt.
 
-- [ ] **Step 3: Reconcile duplicate candidates by root cause**
+- [x] **Step 3: Reconcile duplicate candidates by root cause**
 
 Compare `root_cause_key`, affected behavior, controls, sinks, and locations across all lanes. Choose one canonical audit ID, retain every other stable ID in `aliases`, preserve every affected location, and link every security artifact. Write `security-crosswalk.jsonl` using the shared crosswalk keys. Do not merge independently reachable security instances; use `summary_group` for shared prose instead.
 
-- [ ] **Step 4: Close every candidate**
+- [x] **Step 4: Close every candidate**
 
 For each candidate, confirm:
 
@@ -1024,11 +1024,11 @@ For each candidate, confirm:
 
 If proof is missing, use `deferred` and name the missing proof. If behavior is disproved, use `suppressed`. Never silently drop a candidate.
 
-- [ ] **Step 5: Calibrate findings and roadmap seeds**
+- [x] **Step 5: Calibrate findings and roadmap seeds**
 
 Order reportable candidates by `Blocking`, `Should fix`, `Worth considering`, then `Nit`, and by stable ID within a severity. Create roadmap seeds for every reportable finding and any explicit `HARDENING-NNN` defense-in-depth goal. Preserve plugin severity/confidence in the security crosswalk and explain every main-label choice.
 
-- [ ] **Step 6: Validate reconciliation types and closure**
+- [x] **Step 6: Validate reconciliation types and closure**
 
 Run:
 
@@ -1110,7 +1110,7 @@ Expected: exact pinned coverage and no open, malformed, or duplicate candidate I
 - Consumes: Task 8 canonical reconciliation only.
 - Produces: the canonical reader-facing report and stable finding/hardening IDs consumed by Task 10.
 
-- [ ] **Step 1: Create the report with the exact section order**
+- [x] **Step 1: Create the report with the exact section order**
 
 Use `apply_patch` to create the report with these literal headings:
 
@@ -1164,11 +1164,11 @@ Use `apply_patch` to create the report with these literal headings:
 
 Populate every section from named evidence artifacts. Use `No findings.` in an empty severity subsection, `No candidates were discovered.` when the candidate ledger is empty, `No deferred work.` when applicable, and `No standalone hardening goals.` when every roadmap seed traces to a finding.
 
-- [ ] **Step 2: Write audit identity, drift, baseline, and limitations**
+- [x] **Step 2: Write audit identity, drift, baseline, and limitations**
 
 Name the full pinned SHA, 40-file count, source HEAD at start, UTC start/end, current working-tree state, committed drift, ignored/generated snapshots, exact baseline commands/statuses, available/unavailable tools, failed checks and alternatives, and the stricter no-live-Jira rule. Explain that the current revised design controls execution while the pinned design blob is contextual evidence.
 
-- [ ] **Step 3: Write the complete candidate ledger and findings**
+- [x] **Step 3: Write the complete candidate ledger and findings**
 
 Give every canonical candidate one ledger row with ID, aliases, category, disposition, confidence, main severity when reportable, security IDs when applicable, and closure evidence. Mention every alias in its canonical row so no discovered candidate disappears during deduplication. Each reportable finding heading is `#### AUD-LANE-NNN — Concrete title` and includes:
 
@@ -1182,15 +1182,15 @@ Give every canonical candidate one ledger row with ID, aliases, category, dispos
 
 Order findings by the four literal severity headings. Keep grouped root-cause prose lossless through aliases, instances, and affected locations.
 
-- [ ] **Step 4: Write the security bundle reference and retention limitation**
+- [x] **Step 4: Write the security bundle reference and retention limitation**
 
 Read `$SCAN_DIR` from `security-scan-dir.txt` and `$SCAN_ID` from `security-scan-id.txt`. Record both the resolved absolute path and portable form `$SYSTEM_TEMP/codex-security-scans/agent-skills/$SCAN_ID/`. Link canonical JSON, generated `report.md`, threat model, discovery report, coverage ledger, and applicable candidate/write-up/hardening artifacts. Render `security-crosswalk.jsonl` as a table with audit ID, plugin candidate/finding IDs, both taxonomies, final disposition, and three receipt links. State that system-temporary retention is environment-dependent and the bundle must remain intact for the report to be fully verifiable.
 
-- [ ] **Step 5: Populate every coverage row**
+- [x] **Step 5: Populate every coverage row**
 
 Render exactly 40 `pinned tracked` rows from reconciliation plus one `ignored/generated` row per audit-start expanded ignored file. Wrap each path in Markdown code spans so the mechanical parser can identify it. Receipts cite the pinned revision, exact lines or full-file range, review method, and candidate IDs. Historical documents use `contextual` with the contradiction check performed; ignored entries use `included` or `not applicable` with a concrete reason. Escape any literal table-cell pipe as `\|`. Link the security coverage ledger once in the appendix introduction rather than duplicating its surface rows.
 
-- [ ] **Step 6: Validate the report mechanically**
+- [x] **Step 6: Validate the report mechanically**
 
 Run:
 
@@ -1266,7 +1266,7 @@ PY
 
 Expected: exact coverage equality, every candidate accounted for, and the finalized scan linked.
 
-- [ ] **Step 7: Commit the main audit report**
+- [x] **Step 7: Commit the main audit report**
 
 Run:
 
@@ -1291,7 +1291,7 @@ Expected: only the main audit report is committed.
 - Consumes: finalized canonical findings and explicit hardening goals from Task 9.
 - Produces: dependency-ordered `RM-NNN` items; every item traces to at least one `AUD-*` or `HARDENING-NNN` ID.
 
-- [ ] **Step 1: Create the roadmap with the exact section order**
+- [x] **Step 1: Create the roadmap with the exact section order**
 
 Use `apply_patch` to create:
 
@@ -1322,11 +1322,11 @@ Use `apply_patch` to create:
 
 Use `None.` under an empty priority section and `No remediation items.` between the markers when there are no reportable findings or explicit hardening goals.
 
-- [ ] **Step 2: Define dependency order and effort**
+- [x] **Step 2: Define dependency order and effort**
 
 Assign `RM-001` onward in actual implementation order, not severity order. Every item states one priority, `S`/`M`/`L` effort under the Global Constraints scale, dependencies by roadmap ID or `None`, exact affected files, and why the sequence avoids unsafe partial remediation.
 
-- [ ] **Step 3: Write implementation-ready items**
+- [x] **Step 3: Write implementation-ready items**
 
 Each item uses this literal field order:
 
@@ -1347,15 +1347,15 @@ Each item uses this literal field order:
 
 Replace the sample values with reconciled IDs, real repository paths, concrete acceptance behavior, and commands that would fail before remediation and pass afterward. Do not include broad implementation advice without a measurable acceptance condition.
 
-- [ ] **Step 4: Preserve deferred work and hardening traceability**
+- [x] **Step 4: Preserve deferred work and hardening traceability**
 
 Carry every deferred candidate into `Deferred Investigation Items` with missing proof, safe next command, and the condition for promotion/suppression. Explicit defense-in-depth work uses `HARDENING-NNN` IDs defined in the audit report. Do not invent roadmap work unrelated to a finding or labeled hardening goal.
 
-- [ ] **Step 5: Build the verification matrix**
+- [x] **Step 5: Build the verification matrix**
 
 For each `RM-NNN`, repeat its traceability IDs, acceptance-criterion summary, exact focused command, and broader regression commands. Include the three repository baseline commands for any item that can change packaged content, validation, tests, or workflows.
 
-- [ ] **Step 6: Validate roadmap traceability**
+- [x] **Step 6: Validate roadmap traceability**
 
 Run:
 
@@ -1395,7 +1395,7 @@ PY
 
 Expected: sequential roadmap IDs, complete required fields, no orphan item, and every reportable finding traced.
 
-- [ ] **Step 7: Commit the remediation roadmap**
+- [x] **Step 7: Commit the remediation roadmap**
 
 Run:
 
@@ -1422,11 +1422,11 @@ Expected: only the remediation roadmap is committed.
 - Consumes: every prior task output.
 - Produces: evidence that all design completion criteria hold and no product/external mutation occurred.
 
-- [ ] **Step 1: Invoke the completion-verification workflow**
+- [x] **Step 1: Invoke the completion-verification workflow**
 
 Invoke `superpowers:verification-before-completion` and use fresh command output from this task. Do not rely on earlier green logs for the final claim.
 
-- [ ] **Step 2: Re-run the repository baseline in the pinned clone**
+- [x] **Step 2: Re-run the repository baseline in the pinned clone**
 
 Run:
 
@@ -1443,11 +1443,11 @@ Run:
 
 Expected documented baseline: 54 passing tests, two validated skills, and a passing packaging dry run. If fresh output differs, update the report with the failure and affected coverage before continuing.
 
-- [ ] **Step 3: Re-run Tasks 7, 9, and 10 mechanical validators**
+- [x] **Step 3: Re-run Tasks 7, 9, and 10 mechanical validators**
 
 Run the finalized security-bundle check, report coverage/candidate check, and roadmap traceability check exactly as written in those tasks. Expected: all three pass with the same scan directory and candidate counts.
 
-- [ ] **Step 4: Take the end-state ignored/generated snapshot**
+- [x] **Step 4: Take the end-state ignored/generated snapshot**
 
 Run:
 
@@ -1460,7 +1460,7 @@ diff -u "$EVIDENCE_DIR/start/ignored-files.txt" "$EVIDENCE_DIR/end-ignored-files
 
 Record any new entry and give it a coverage receipt before completion. Audit-created files must be limited to the two repository documents and the documented temporary roots.
 
-- [ ] **Step 5: Prove no product file changed**
+- [x] **Step 5: Prove no product file changed**
 
 Run:
 
@@ -1485,7 +1485,7 @@ test -z "$(git -C "$AUDIT_CHECKOUT" status --porcelain)"
 
 Expected: only the two audit documents changed since `HEAD_AT_START` and the pinned clone is clean.
 
-- [ ] **Step 6: Perform the primary reviewer's semantic closure**
+- [x] **Step 6: Perform the primary reviewer's semantic closure**
 
 Read the current design again and point every completion criterion to report text or a verified artifact:
 
@@ -1501,7 +1501,7 @@ Read the current design again and point every completion criterion to report tex
 
 Correct any report-only gap with `apply_patch` and re-run all affected validators.
 
-- [ ] **Step 7: Commit only verified document corrections, when present**
+- [x] **Step 7: Commit only verified document corrections, when present**
 
 Run:
 
