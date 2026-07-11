@@ -1,5 +1,11 @@
 # Audit Remediation Design
 
+> **Status: Implemented (2026-07-11).** All three remediations landed on `main`
+> via merge commit `a65d327` (commits `d211cf3` RM-001, `5a3d1bd` RM-002,
+> `64978c3` RM-003). Final whole-branch review: Ready to merge, no
+> Critical/Important findings. Outstanding: observe a green CI run on the
+> repinned action refs after push (see plan Task 1 Step 8).
+
 ## Purpose
 
 Remediate the three confirmed "Worth considering" findings from
@@ -54,6 +60,16 @@ re-confirm these are still the latest `v7.x.x` (checkout) and `v6.3.x`
 (setup-python) releases and re-resolve the SHA from the tag if a newer patch has
 shipped. Pin to a published, battle-tested release — never a release candidate.
 
+Note that these pins are also **major-version upgrades** (checkout v4 → v7,
+setup-python v5 → v6), not a pure pin-in-place of the versions currently in use.
+Before implementing, skim both upstream release notes for breaking changes
+relevant to these workflows (runner/Node runtime requirements, changed default
+inputs). Both workflows use each action with default or trivial inputs
+(`python-version: "3.12"` only), so no breakage is expected — but a green CI run
+on the repinned workflow is required evidence, and if the major upgrade does
+break, fall back to pinning the latest release of the currently-used major
+instead (the finding is about pinning, not upgrading).
+
 ### New file: `.github/dependabot.yml`
 
 Configure Dependabot's `github-actions` ecosystem so the SHA pins receive
@@ -103,6 +119,12 @@ vet a version, it guarantees a human sees every version change.
 - `python3 scripts/validate_skills.py`
 - `python3 scripts/package_skills.py --version v0.0.0 --dry-run`
 
+Verification limitation: `release.yml` triggers only on `v*.*.*` tag pushes, so
+it cannot be exercised end-to-end before the next release. Its action steps
+(checkout, setup-python) are identical to `ci.yml`'s, so a passing CI run on the
+repinned refs is the accepted proxy; the "release workflow continues to pass"
+criterion is finally confirmed by the first tagged release after merge.
+
 ## RM-002 — Exclude `__pycache__`/`*.pyc` from packaged archives
 
 ### Change
@@ -124,6 +146,20 @@ This is a deliberately narrow, hardcoded filter for bytecode artifacts — not a
 general `.gitignore`-driven exclusion engine (YAGNI; the finding is scoped to
 `__pycache__`/`.pyc`/`.pyo`).
 
+Filtering **before** the symlink check has a deliberate side effect: a symlink
+inside a `__pycache__` directory (or one named `*.pyc`/`*.pyo`) no longer raises
+`PackagingError` — it is silently excluded along with the rest of the ignorable
+path. This is intended: ignorable paths are wholly outside packaging concern,
+and the symlink policy exists to keep symlinks out of *archives*, which the
+filter already guarantees for these paths. The existing
+`test_rejects_symlinked_source_outside_skill` behavior for non-ignorable paths
+must remain unchanged.
+
+Both archive builders (`expected_individual_entries` and
+`expected_collection_entries`) funnel through `source_files()`, so the single
+filter covers the per-skill `.skill` archives and the collection ZIP alike — do
+not add per-builder filtering.
+
 ### Acceptance criteria
 
 - `source_files()` skips `__pycache__` directories and `*.pyc`/`*.pyo` files
@@ -135,10 +171,12 @@ general `.gitignore`-driven exclusion engine (YAGNI; the finding is scoped to
 
 ### Testing (TDD)
 
-Add a test in `tests/test_package_skills.py` that plants a
-`__pycache__/x.cpython-312.pyc` file under a skill directory, runs packaging, and
-asserts no archive member contains a `__pycache__` path component or ends in
-`.pyc`/`.pyo`. Write it failing against current behavior first.
+Add a test in `tests/test_package_skills.py` that plants both a
+`__pycache__/x.cpython-312.pyc` file and a loose `stale.pyo` file under a skill
+directory, runs packaging, and asserts no member of **either** the per-skill
+`.skill` archive **or** the collection ZIP contains a `__pycache__` path
+component or ends in `.pyc`/`.pyo`. Write it failing against current behavior
+first.
 
 ### Verification
 
@@ -172,29 +210,48 @@ the emitted dry-run JSON includes an explicit field:
 ```
 
 The caveat appears **only** when identity was actually faked — i.e. dry-run +
-`--email` resolution. The `--account-id` and `--unassign` paths need no
+`--email` resolution. This covers all three email-resolving paths: `assign
+--email`, `watch --email` (add), and `watch --remove --email` (jira.py:456-457
+resolves before the DELETE). The `--account-id` and `--unassign` paths need no
 resolution and carry no caveat. Contract: **caveat present ⟺ dry-run AND
 email-resolved identity.**
 
+Placement: the field is a **top-level key of the dry-run preview object**
+emitted by `request()` (a sibling of `method`/`url`/`headers`/`body`), not
+injected into `body`. Two constraints force this: `watch` (add) sends the
+accountId as a bare JSON string body and `watch --remove` carries it in a query
+param, so there is no object body to annotate; and the preview's `url`/`body`
+must stay faithful to what the live request would send. Emitting a second JSON
+document is also ruled out — dry-run output is a single JSON value per request,
+an invariant locked in by the existing
+`test_dry_run_redacts_token_and_emits_one_json_value` /
+`test_whoami_dry_run_emits_one_json_value` tests, and agents parse it as such.
+
 Detection is explicit (the command tracks whether it took the email-resolution
-branch under dry-run), not a fragile string-sniff of the placeholder value. Exact
-wiring is left to the implementation plan; the observable contract above is
-fixed.
+branch under dry-run and passes that fact through to the preview emission), not
+a fragile string-sniff of the placeholder value. Exact wiring is left to the
+implementation plan; the observable contract above is fixed.
 
 ### `SKILL.md` update
 
 Update the dry-run guidance (Operating rule 2 around L19-23 and/or the dry-run
 note around L69) so it accurately states that dry-run previews of `--email`
 `assign`/`watch` do **not** verify identity resolution — the `identity_resolution`
-field flags this, and identity is checked only on the live run.
+field flags this, and identity is checked only on the live run. Also check the
+Jira-specific constraint "Email lookup must resolve exactly or unambiguously"
+(around L78-79) — it reads as if resolution is always enforced; qualify it for
+dry-run if the chosen wording elsewhere doesn't already cover it.
 
 ### Acceptance criteria
 
-- Dry-run `assign`/`watch` with `--email` emits
-  `identity_resolution: "not verified in dry-run"` and makes no `/user/search`
-  call.
+- Dry-run `assign`/`watch` with `--email` — including `watch --remove --email`
+  — emits `identity_resolution: "not verified in dry-run"` as a top-level key of
+  the single dry-run preview object, and makes no `/user/search` call.
 - Dry-run `assign`/`watch` with `--account-id` (and `--unassign`) does **not**
   emit the caveat field.
+- Dry-run output remains exactly one JSON value per previewed request (existing
+  `*_emits_one_json_value` tests stay green), and the preview's `url` and `body`
+  are unchanged from current behavior.
 - `SKILL.md` accurately describes the `--email` dry-run behavior.
 - The live (non-dry-run) resolution path is unchanged and still raises on zero or
   multiple matches (existing
@@ -206,9 +263,9 @@ field flags this, and identity is checked only on the live run.
 Add `DryRunIdentityResolutionTests.test_email_assign_and_watch_dry_runs_are_not_mistaken_for_verified_identity_resolution`
 in `tests/test_jira_cli.py`. It asserts:
 
-- dry-run `assign --email` and `watch --email` output carry
-  `identity_resolution: "not verified in dry-run"` and trigger no `/user/search`
-  call, and
+- dry-run `assign --email`, `watch --email`, and `watch --remove --email`
+  output carry `identity_resolution: "not verified in dry-run"` as a top-level
+  key of the (single) preview object and trigger no `/user/search` call, and
 - dry-run `--account-id` output does **not** carry the field.
 
 Write it failing against current behavior first.
