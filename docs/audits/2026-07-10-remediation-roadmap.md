@@ -2,7 +2,7 @@
 
 ## Scope and Prioritization
 
-This roadmap operationalizes the three "Worth considering" findings confirmed in `docs/audits/2026-07-10-codebase-audit.md` for the pinned revision `8605a17c906d715c58b9c1a2511b8d0079446a4a` of `agent-skills`. No Blocking or Should-fix findings were confirmed, so there is no P0 or P1 remediation work. All three reportable findings (`AUD-CORE-001`, `AUD-JIRA-001`, `AUD-REL-001`) are traced 1:1 by the three roadmap items below (`RM-001`–`RM-003`), consistent with the audit's `roadmap-seeds.jsonl` (3 seeds, no standalone hardening goals). Priority is assigned independently of severity: all three findings share "Worth considering" severity, but each is bucketed into P2 or P3 based on release-integrity impact and urgency, not on how the finding was discovered.
+This roadmap operationalizes the three "Worth considering" findings confirmed in `docs/audits/2026-07-10-codebase-audit.md` for the pinned revision `8605a17c906d715c58b9c1a2511b8d0079446a4a` of `agent-skills`. No Blocking or Should-fix findings were confirmed, so there is no P0 or P1 remediation work. All three reportable findings (`AUD-CORE-001`, `AUD-JIRA-001`, `AUD-REL-001`) are traced 1:1 by the three roadmap items below (`RM-001`–`RM-003`), consistent with the audit's `roadmap-seeds.jsonl` (3 seeds, no standalone hardening goals). The completed Codex Security 0.1.11 bundle recorded by the audit has zero canonical reportable findings; its reproduced top-level-symlink candidate is confirmed but suppressed after attack-path analysis, so it creates neither a remediation item nor a standalone hardening goal. Priority is assigned independently of severity: all three findings share "Worth considering" severity, but each is bucketed into P2 or P3 based on release-integrity impact and urgency, not on how the finding was discovered.
 
 ## Dependency and Sequencing Summary
 
@@ -41,14 +41,14 @@ None.
 - **Traceability:** AUD-REL-001
 - **Effort:** S
 - **Dependencies:** None
-- **Affected files:** `.github/workflows/ci.yml`, `.github/workflows/release.yml`
+- **Affected files:** `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `.github/dependabot.yml`
 - **Why now:** `release.yml` runs with `permissions: contents: write` and an ephemeral `github.token`, publishing real GitHub Release artifacts (per-skill `.skill` archives, collection ZIP, `SHA256SUMS`) on every tag push. Both workflows currently reference `actions/checkout@v4` and `actions/setup-python@v5` by mutable major-version tag rather than a pinned commit SHA, so a repointed upstream tag could execute unreviewed code with write access before checksums are computed. This is standard, low-effort supply-chain hardening (per GitHub's own guidance) and is sequenced first because it hardens the same release pipeline that will publish the artifact affected by RM-002.
 - **Acceptance criteria:**
   - Every `uses: actions/...` reference in `ci.yml` and `release.yml` is pinned to a full commit SHA with a version comment (e.g. `actions/checkout@<sha> # v4.x.x`).
-  - Dependabot's `github-actions` ecosystem (or an equivalent periodic bump process) is configured to keep the SHA pins current.
+  - `.github/dependabot.yml` configures Dependabot's `github-actions` ecosystem for the repository root with a recurring schedule, so SHA pins receive update pull requests.
   - CI and release workflows continue to pass after repinning.
 - **Verification commands:**
-  - `grep -n 'uses: actions/' .github/workflows/ci.yml .github/workflows/release.yml`
+  - `python3 -c "from pathlib import Path; import re; refs = [match.groups() for path in (Path('.github/workflows/ci.yml'), Path('.github/workflows/release.yml')) for match in re.finditer(r'^\\s*uses:\\s*(actions/[^\\s#]+)(?:\\s+#\\s+([^\\n]+))?\\s*$', path.read_text(), re.MULTILINE)]; config = Path('.github/dependabot.yml').read_text(); assert refs and all(re.fullmatch(r'actions/[A-Za-z0-9_.-]+@[0-9a-f]{40}', ref) and comment and re.fullmatch(r'v\\d+\\.\\d+\\.\\d+', comment.strip()) for ref, comment in refs), refs; assert re.search(r'package-ecosystem:\\s*\"github-actions\"', config) and re.search(r'directory:\\s*\"/\"', config) and re.search(r'schedule:\\s*\\n\\s*interval:\\s*\"(?:daily|weekly|monthly)\"', config), config"`
   - `python3 -m unittest discover -s tests -v`
   - `python3 scripts/validate_skills.py`
   - `python3 scripts/package_skills.py --version v0.0.0 --dry-run`
@@ -67,7 +67,7 @@ None.
   - Existing packaging test suite (`tests/test_package_skills.py`) continues to pass.
 - **Verification commands:**
   - `env -u PYTHONDONTWRITEBYTECODE python3 -m unittest discover -s tests -v`
-  - `env -u PYTHONDONTWRITEBYTECODE python3 scripts/package_skills.py --version v0.0.0 --output /tmp/dist-check`
+  - `tmp=$(mktemp -d); env -u PYTHONDONTWRITEBYTECODE python3 scripts/package_skills.py --version v0.0.0 --output "$tmp/dist" && python3 -c "from pathlib import Path; import sys, zipfile; names = [name for archive in Path(sys.argv[1]).glob('*.skill') for name in zipfile.ZipFile(archive).namelist()]; forbidden = [name for name in names if '__pycache__' in name.split('/') or name.endswith(('.pyc', '.pyo'))]; assert not forbidden, forbidden" "$tmp/dist"; status=$?; rm -rf "$tmp"; exit $status`
   - `python3 -m unittest discover -s tests -v`
   - `python3 scripts/validate_skills.py`
   - `python3 scripts/package_skills.py --version v0.0.0 --dry-run`
@@ -85,19 +85,21 @@ None.
   - `SKILL.md`'s guidance about dry-running ambiguous writes is updated if needed to accurately describe the `--email` dry-run behavior.
   - Existing `jira.py` test suite continues to pass.
 - **Verification commands:**
-  - `JIRA_BASE_URL=https://example.atlassian.net JIRA_EMAIL=user@example.com JIRA_API_TOKEN=dummy-token python3 skills/abd-jira-cloud/scripts/jira.py --dry-run assign ABC-1 --email ambiguous@example.com`
+  - `python3 -m unittest tests.test_jira_cli.DryRunIdentityResolutionTests.test_email_assign_and_watch_dry_runs_are_not_mistaken_for_verified_identity_resolution`
   - `python3 -m unittest discover -s tests -v`
+  - `python3 scripts/validate_skills.py`
+  - `python3 scripts/package_skills.py --version v0.0.0 --dry-run`
 
 <!-- roadmap-items:end -->
 
 ## Deferred Investigation Items
 
-- **Run Codex Security 0.1.11 repository scan in a Codex host and reconcile its bundle.** The mandated Codex Security 0.1.11 scan bundle was blocked in this execution environment — the Codex-native capability (`codex-security:security-scan`) and its supporting Codex preflight/goal/MCP tools and phase subagents are not available in this Claude Code session (evidence: `evidence/security-preflight/blocked.txt`). Missing proof: the Codex capability/host itself was never reachable, so no bundle, `scan-manifest.json`, `findings.json`, or Codex-authored report was produced. Safe next command: invoke `codex-security:security-scan` version `0.1.11` in a Codex CLI/desktop host at the pinned revision `8605a17c906d715c58b9c1a2511b8d0079446a4a`. Promotion/suppression condition: promote any bundle finding to a new `RM-NNN` roadmap item (tracing to a new `AUD-*` ID assigned during reconciliation); suppress (record as closed, no new item) if the scan confirms no additional issue beyond the three already-reported findings.
+None. The formerly deferred Codex Security scan completed as bundle `8605a17c906d715c58b9c1a2511b8d0079446a4a_20260711T031439Z`, whose canonical `findings.json` is empty. The only reconciled security candidate has reproducible proof and completed validation/attack-path receipts but is suppressed: the demonstrated path requires a privileged source-tree writer and maintainer-controlled release, with no lower-privileged trigger evidenced. It is retained in the audit for traceability, not deferred for promotion, and has no associated hardening goal or roadmap item.
 
 ## Verification Matrix
 
 | RM ID | Traceability | Acceptance-criterion summary | Focused command | Broader regression commands |
 |---|---|---|---|---|
-| RM-001 | AUD-REL-001 | All `actions/checkout` and `actions/setup-python` references in `ci.yml`/`release.yml` pinned to full commit SHAs with version comments; Dependabot (or equivalent) configured to keep pins current; workflows continue to pass. | `grep -n 'uses: actions/' .github/workflows/ci.yml .github/workflows/release.yml` | `python3 -m unittest discover -s tests -v`; `python3 scripts/validate_skills.py`; `python3 scripts/package_skills.py --version v0.0.0 --dry-run` |
-| RM-002 | AUD-CORE-001 | `package_skills.py` excludes `__pycache__`/`*.pyc`/`*.pyo` from collected skill files; workflow-order proof yields `generated_members == []`; packaging test suite passes. | `env -u PYTHONDONTWRITEBYTECODE python3 scripts/package_skills.py --version v0.0.0 --output /tmp/dist-check` | `env -u PYTHONDONTWRITEBYTECODE python3 -m unittest discover -s tests -v`; `python3 -m unittest discover -s tests -v`; `python3 scripts/validate_skills.py`; `python3 scripts/package_skills.py --version v0.0.0 --dry-run` |
-| RM-003 | AUD-JIRA-001 | Dry-run `--email` assign/watch either performs the `/user/search` lookup and surfaces ambiguity, or explicitly flags `identity_resolution` as unverified; `SKILL.md` updated to match actual behavior; jira.py test suite passes. | `JIRA_BASE_URL=https://example.atlassian.net JIRA_EMAIL=user@example.com JIRA_API_TOKEN=dummy-token python3 skills/abd-jira-cloud/scripts/jira.py --dry-run assign ABC-1 --email ambiguous@example.com` | `python3 -m unittest discover -s tests -v` |
+| RM-001 | AUD-REL-001 | All `actions/checkout` and `actions/setup-python` references in `ci.yml`/`release.yml` pinned to full commit SHAs with version comments; `.github/dependabot.yml` configures recurring root-level `github-actions` updates; workflows continue to pass. | `python3 -c "from pathlib import Path; import re; refs = [match.groups() for path in (Path('.github/workflows/ci.yml'), Path('.github/workflows/release.yml')) for match in re.finditer(r'^\\s*uses:\\s*(actions/[^\\s#]+)(?:\\s+#\\s+([^\\n]+))?\\s*$', path.read_text(), re.MULTILINE)]; config = Path('.github/dependabot.yml').read_text(); assert refs and all(re.fullmatch(r'actions/[A-Za-z0-9_.-]+@[0-9a-f]{40}', ref) and comment and re.fullmatch(r'v\\d+\\.\\d+\\.\\d+', comment.strip()) for ref, comment in refs), refs; assert re.search(r'package-ecosystem:\\s*\"github-actions\"', config) and re.search(r'directory:\\s*\"/\"', config) and re.search(r'schedule:\\s*\\n\\s*interval:\\s*\"(?:daily|weekly|monthly)\"', config), config"` | `python3 -m unittest discover -s tests -v`; `python3 scripts/validate_skills.py`; `python3 scripts/package_skills.py --version v0.0.0 --dry-run` |
+| RM-002 | AUD-CORE-001 | `package_skills.py` excludes `__pycache__`/`*.pyc`/`*.pyo` from collected skill files; workflow-order proof yields `generated_members == []`; packaging test suite passes. | `tmp=$(mktemp -d); env -u PYTHONDONTWRITEBYTECODE python3 scripts/package_skills.py --version v0.0.0 --output "$tmp/dist" && python3 -c "from pathlib import Path; import sys, zipfile; names = [name for archive in Path(sys.argv[1]).glob('*.skill') for name in zipfile.ZipFile(archive).namelist()]; forbidden = [name for name in names if '__pycache__' in name.split('/') or name.endswith(('.pyc', '.pyo'))]; assert not forbidden, forbidden" "$tmp/dist"; status=$?; rm -rf "$tmp"; exit $status` | `env -u PYTHONDONTWRITEBYTECODE python3 -m unittest discover -s tests -v`; `python3 -m unittest discover -s tests -v`; `python3 scripts/validate_skills.py`; `python3 scripts/package_skills.py --version v0.0.0 --dry-run` |
+| RM-003 | AUD-JIRA-001 | Dry-run `--email` assign/watch either performs the `/user/search` lookup and surfaces ambiguity, or explicitly flags `identity_resolution` as unverified; `SKILL.md` updated to match actual behavior; jira.py test suite passes. | `python3 -m unittest tests.test_jira_cli.DryRunIdentityResolutionTests.test_email_assign_and_watch_dry_runs_are_not_mistaken_for_verified_identity_resolution` | `python3 -m unittest discover -s tests -v`; `python3 scripts/validate_skills.py`; `python3 scripts/package_skills.py --version v0.0.0 --dry-run` |
