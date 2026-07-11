@@ -66,8 +66,12 @@ Put the global `--dry-run` option before the command:
 python3 /absolute/path/to/scripts/jira.py --dry-run update ABC-123 --summary "New title"
 ```
 
-Dry-run a write when its scope or payload needs confirmation. Do not publish
-dry-run output to shared logs because request bodies may contain issue content.
+Dry-run a write when its scope or payload needs confirmation. A dry-run of
+`assign`/`watch` with `--email` does not verify identity resolution: the
+preview carries `identity_resolution: "not verified in dry-run"`, and the
+email is resolved — or rejected as unmatched or ambiguous — only on the live
+run. Do not publish dry-run output to shared logs because request bodies may
+contain issue content.
 
 ## Jira-specific constraints
 
@@ -75,8 +79,9 @@ dry-run output to shared logs because request bodies may contain issue content.
   converted automatically; `comment --adf-file FILE` accepts rich ADF.
 - Status is changed through a legal workflow transition, never by updating the
   `status` field. Run `transitions KEY` when the destination is uncertain.
-- Users are identified by `accountId`. Email lookup must resolve exactly or
-  unambiguously; otherwise request an account ID.
+- Users are identified by `accountId`. On live runs, email lookup must resolve
+  exactly or unambiguously; otherwise request an account ID. Dry-run skips the
+  lookup and marks the preview with `identity_resolution`.
 - `--labels` replaces the complete label list. Confirm the intended replacement
   when existing labels matter.
 
