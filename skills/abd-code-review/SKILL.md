@@ -1,6 +1,7 @@
 ---
 name: abd-code-review
-description: Run a deep, evidence-based, multi-layer code review on a diff, PR, branch, commit range, or file set — any language, framework, or stack. Use whenever the user asks for a code review, deep review, PR review, pre-merge check, security/performance/reliability pass over changes, or says things like "review this", "look over my changes", "is this safe to ship", or "check this PR" — even if they don't say the word "review".
+description: Run a deep, evidence-based, multi-layer code review on a diff, PR, branch, commit range, or file set — any language, framework, or stack.
+disable-model-invocation: true
 ---
 
 # Deep Code Review

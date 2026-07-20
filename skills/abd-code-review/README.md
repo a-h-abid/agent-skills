@@ -17,10 +17,12 @@ Prebuilt `.skill` archives are also attached to tagged GitHub Releases.
 ## Example prompts
 
 ```text
-Use abd-code-review to review the current branch against main.
-Review PR 482 and focus on authorization and migration safety.
-Is this payment-worker change safe to ship?
+/abd-code-review review the current branch against main.
+/abd-code-review review PR 482 and focus on authorization and migration safety.
+/abd-code-review check whether this payment-worker change is safe to ship.
 ```
+
+This skill is manual-only: invoke it with `/abd-code-review`. Review-related phrases do not load it automatically.
 
 ## Bundled resources
 
