@@ -8,6 +8,10 @@ Deep, evidence-based code review for diffs, pull requests, branches, commit rang
 - A change needs security, data-integrity, reliability, performance, or rollout scrutiny.
 - You want findings verified against surrounding code rather than a diff-only checklist.
 
+## Scope
+
+Defensive pre-merge review of a codebase you own. The output is a review document — each finding names a weakness, its production consequence, and the fix. The skill reads the repository under review (code, config, schema, tests, history, its own tooling output); it does not touch live systems and does not produce exploit code, payloads, or reproduction steps.
+
 ## Install
 
 Copy or symlink this directory into the skills directory used by your agent. The portable entry point is `SKILL.md`; no platform-specific plugin is required.

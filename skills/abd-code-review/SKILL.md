@@ -1,6 +1,6 @@
 ---
 name: abd-code-review
-description: Run a deep, evidence-based, multi-layer code review on a diff, PR, branch, commit range, or file set — any language, framework, or stack.
+description: Run a deep, evidence-based, multi-layer defensive review of your own code before merge — on a diff, PR, branch, commit range, or file set, in any language, framework, or stack.
 disable-model-invocation: true
 ---
 
@@ -11,6 +11,12 @@ Review the target the user named — a diff, PR, branch, commit range, or set of
 You are reviewing as a **senior staff engineer** and production owner. Bias your effort toward **correctness, security, data integrity, reliability, performance, and failure modes** over stylistic cleanliness — flag style briefly, then move on. Your goal is not to produce a long checklist; it is to produce **useful, verified, high-signal findings** that help the author safely ship or correctly rework the change.
 
 This review is **language- and stack-agnostic**: detect what you're actually looking at, then layer the matching stack-specific scrutiny (from `references/`) on top of the universal principles below.
+
+## Scope and intent
+
+This is **defensive pre-merge engineering review**: the author's own team reads the change they are about to ship, so defects get fixed before they reach production. Every layer below, security included, exists to answer one question — *what will hurt us in production, and what should we change before merge?*
+
+The deliverable is a review document for the author: each finding names a weakness, states the production consequence, and gives the fix. The work stays inside the repository under review — reading its code, config, schema, tests, history, and its own tooling output. It doesn't target live systems, and it doesn't produce exploit code, working payloads, intrusion tooling, or reproduction procedures; a fix belongs in the review, an attack does not.
 
 ## Review Principles
 
@@ -99,9 +105,11 @@ Work through every layer at the depth your sizing strategy allows. Don't skip a 
 
 ## Layer 2 — Security & Abuse Resistance
 
+This layer is a **missing-controls audit** of the diff: for each item, the question is whether the code has the control, and if it doesn't, what to add. Write every security finding as four parts — the control that's missing or weak, the code path that reaches it, one line on what that exposes, and the fix (patch snippet, guard, validation rule, policy, or config change). That shape is what the author can act on before merge.
+
 - User-controlled input: validated for type, format, length, range, enum, and object shape before use — on the server, regardless of client-side validation.
 - **Authorization** checked on every new endpoint/route/handler/queue consumer/webhook/resolver — not just authentication. Confirm the actor is allowed to act on *this* resource (no IDOR); tenant/ownership scoping enforced at the query level; bulk actions authorize every item.
-- Injection: queries parameterized everywhere; no command injection via shell/process execution; no path traversal on file/object-storage paths; no SSRF on outbound calls built from user input (including redirects and cloud metadata IPs); no unsafe deserialization or dynamic code execution.
+- Injection defenses on every user-influenced sink: queries parameterized/bound; process calls built from argument arrays rather than interpolated shell strings; file and object-storage paths canonicalized and confined to an intended root; outbound URLs built from user input constrained by an allowlist, with redirects and internal/link-local ranges excluded (SSRF); deserialization and dynamic evaluation kept off untrusted input.
 - Web surface: CSRF protection on cookie-authenticated state changes, CORS not overly broad, open redirects prevented, uploads validated (type, size, storage location, no executable serving).
 - Abuse: rate limits on login/OTP/password-reset/expensive/write-heavy endpoints; oversized payloads rejected.
 - Secrets: none hardcoded or committed; they belong in env/secrets manager. Error responses don't leak stack traces, SQL, or internal hostnames.
@@ -260,4 +268,4 @@ After the findings, optionally add **Done well** (1–2 lines max): a genuinely 
 
 ### Before returning the review, self-check
 
-Did I verify every Blocking/Should-fix claim, or tag it honestly? Did I open call sites where a finding depended on them? Did I check the layers that don't announce themselves (deploy safety, concurrency, what's missing)? Did I deduplicate and avoid checklist-dumping? Does the author know exactly what to change next? If any answer is no, fix the review before returning it.
+Did I verify every Blocking/Should-fix claim, or tag it honestly? Did I open call sites where a finding depended on them? Did I check the layers that don't announce themselves (deploy safety, concurrency, what's missing)? Did I deduplicate and avoid checklist-dumping? Does every security finding name the missing control and the fix that closes it? Does the author know exactly what to change next? If any answer is no, fix the review before returning it.
