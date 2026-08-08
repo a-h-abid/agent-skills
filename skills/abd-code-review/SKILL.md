@@ -40,11 +40,35 @@ Don't review blind. First, actually load the thing you're reviewing:
 
 ### Size the review
 
-Pick a strategy before diving in:
+Pick a strategy before diving in — size determines depth **and who does the reading** (see "Executing with subagents" below):
 
-- **Small diff (< ~150 lines)**: full-depth pass on everything. Don't pad — a clean 20-line fix deserves a short review.
-- **Medium (~150–800 lines)**: full pass, but lead with the highest-risk files.
-- **Large (> ~800 lines)**: rank files by risk first — migrations, auth/authz, payments/money, concurrency-touching code, external integrations get deep review; mechanical/generated/rename-only files get a skim. **List the files that got lighter scrutiny in the coverage overview.** Never silently skim.
+- **Small diff (< ~150 lines)**: full-depth pass on everything, entirely in your own context — subagent dispatch overhead costs more than it saves. Don't pad — a clean 20-line fix deserves a short review.
+- **Medium (~150–800 lines)**: full pass in your own context, highest-risk files first — but push evidence-gathering side-quests (call-site sweeps, schema checks, authz-middleware hunts, dead-code greps) to parallel read-only Explore subagents that return conclusions instead of file dumps.
+- **Large (> ~800 lines)**: rank files by risk first — migrations, auth/authz, payments/money, concurrency-touching code, external integrations get deep review; mechanical/generated/rename-only files get a skim. **List the files that got lighter scrutiny in the coverage overview.** Never silently skim. Then orchestrate: parallel reviewer subagents do the deep reading, you own synthesis and the verdict.
+
+### Executing with subagents (large diffs)
+
+If your harness has no subagent-dispatch tool, skip this section: do the large review yourself in risk-rank order, and list what got lighter scrutiny in the coverage overview.
+
+Delegation outsources **reading, not judgment**: each reviewer subagent does its own evidence-first verification inside its slice, and you still own dedup, severity, and the final document. Done right, raw diff hunks, full-file reads, and reference files never enter your context — only findings do.
+
+1. Do Step 0 yourself (target, intent, change map, risk ranking, tooling run). Don't deep-read the high-risk files — that's the reviewers' job.
+2. Dispatch general-purpose reviewer subagents **in parallel, one per concern bundle present in the change**; skip a bundle whose concerns are absent and fold any stray relevant checks into another bundle's prompt:
+   - **Correctness & contracts** — Layers 1, 8, 11
+   - **Security & privacy** — Layers 2, 13
+   - **Data, deploy & config** — Layers 3, 4, 10
+   - **Production behavior** — Layers 5, 6, 7, 9
+   Keep Layers 12 and 14 for yourself — architecture fit and what's-missing need the whole-change view you built in Step 0.
+3. Every reviewer prompt contains, in this order:
+   - the **Scope and intent** section of this file, copied verbatim (every bundle, not just security — reviewers start with zero context);
+   - the target as **commands to run** (`gh pr diff <n>`, `git diff <base>...<head> -- <files>`) plus the risk-ranked file list for its bundle — never the pasted diff;
+   - **paths to read**: this SKILL.md (Review Principles, Evidence-gathering moves, its assigned layer sections) and the matching `references/*.md` for the stacks in its file list — paths and layer numbers, never pasted content;
+   - a 3–5 line change summary (intent + change map) and the tooling leads relevant to its bundle;
+   - the output contract below.
+4. **Reviewer output contract**: findings only — each gives `file:line` · severity guess · `[confidence]` tag · what's wrong · one line of evidence (what was actually read) · suggested fix — plus a short "couldn't inspect" list. No overview, no verdict, no per-layer filler; a clean slice returns "no findings" and the couldn't-inspect list.
+5. Synthesize: dedupe by root cause across reports (bundles overlap deliberately — the same flaw may return from two angles), **re-read the cited evidence for every finding you'd mark Blocking** — evidence-first applies to subagent claims too — recalibrate severity with the whole-change view, then write the Output Format yourself. Reviewers' "couldn't inspect" lists feed the coverage overview.
+
+On a **re-review** of a large PR, one extra subagent can verify prior findings' resolved/unresolved status while the bundles cover new code.
 
 ### Leverage the project's own tooling first
 
@@ -55,6 +79,7 @@ Before manual review, check for and run whatever the repo already has — it's c
 - Security tooling if present: dependency audit, secret scan, SAST.
 - Treat tool output as **leads to verify and contextualize**, not findings to copy-paste. Don't spend manual effort on classes of issues the tooling already covers and passes.
 - If tooling exists but can't run (missing deps, no DB), note that in the coverage overview.
+- When delegating a large review, run the tooling **once** yourself and pass each reviewer bundle the leads relevant to it — reviewers don't re-run the suite.
 
 ### Evidence-gathering moves
 
@@ -92,7 +117,9 @@ Identify, from the files in the diff, the **language(s)**, **framework(s)**, and
 
 For a stack with no reference file (Ruby, Elixir, Swift, C++…), apply the universal layers plus your own knowledge of that ecosystem's idioms and failure modes — the layers below are stack-independent by design.
 
-Work through every layer at the depth your sizing strategy allows. Don't skip a layer because nothing obvious jumps out — actively look. But only **report what's actually present**; don't pad the output.
+When delegating, you still detect the stack — it scopes the bundles and tells you which reference files to assign — but each reviewer reads its own references; don't read them all yourself.
+
+Work through every layer at the depth your sizing strategy allows — yourself, or through the reviewer bundles on a delegated large review. Don't skip a layer because nothing obvious jumps out — actively look. But only **report what's actually present**; don't pad the output.
 
 ## Layer 1 — Intent & Correctness
 
@@ -268,4 +295,4 @@ After the findings, optionally add **Done well** (1–2 lines max): a genuinely 
 
 ### Before returning the review, self-check
 
-Did I verify every Blocking/Should-fix claim, or tag it honestly? Did I open call sites where a finding depended on them? Did I check the layers that don't announce themselves (deploy safety, concurrency, what's missing)? Did I deduplicate and avoid checklist-dumping? Does every security finding name the missing control and the fix that closes it? Does the author know exactly what to change next? If any answer is no, fix the review before returning it.
+Did I verify every Blocking/Should-fix claim — including ones a reviewer subagent reported — or tag it honestly? Did I open call sites where a finding depended on them? Did I check the layers that don't announce themselves (deploy safety, concurrency, what's missing)? Did I deduplicate and avoid checklist-dumping? Does every security finding name the missing control and the fix that closes it? Does the author know exactly what to change next? If any answer is no, fix the review before returning it.
