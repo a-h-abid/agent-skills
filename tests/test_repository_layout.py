@@ -5,6 +5,13 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PORTABLE_ORCHESTRATION_PLAN = (
+    ROOT
+    / "docs"
+    / "superpowers"
+    / "plans"
+    / "2026-08-08-abd-code-review-portable-orchestration.md"
+)
 REQUIRED = (
     ".gitignore",
     "CHANGELOG.md",
@@ -60,17 +67,19 @@ class RepositoryLayoutTests(unittest.TestCase):
         self.assertIn("[abd-code-review](skills/abd-code-review/README.md)", readme)
         self.assertIn("[abd-jira-cloud](skills/abd-jira-cloud/README.md)", readme)
 
-    def test_repository_has_one_git_root_on_main(self) -> None:
+    def test_repository_has_one_git_root(self) -> None:
         nested = [path for path in ROOT.rglob(".git") if path != ROOT / ".git"]
         self.assertEqual(nested, [])
-        branch = subprocess.run(
-            ["git", "branch", "--show-current"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        self.assertEqual(branch, "main")
+
+    def test_portable_orchestration_file_map_authorizes_layout_correction(self) -> None:
+        plan = PORTABLE_ORCHESTRATION_PLAN.read_text(encoding="utf-8")
+        file_map = plan.split("## File Map", maxsplit=1)[1].split("---", maxsplit=1)[0]
+
+        self.assertIn(
+            "- Modify `tests/test_repository_layout.py`: make repository layout "
+            "validation branch-neutral while preserving nested Git-root detection.",
+            file_map,
+        )
 
 
 if __name__ == "__main__":

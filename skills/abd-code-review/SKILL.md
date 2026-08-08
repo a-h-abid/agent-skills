@@ -38,37 +38,97 @@ Don't review blind. First, actually load the thing you're reviewing:
 - Read enough surrounding code to understand behavior — a diff line is rarely judgeable in isolation. When a finding depends on how a function is called, **open the call sites** rather than assuming. Read model/entity definitions when validation or authorization depends on them; read migrations together with the code that uses them.
 - **If this is a re-review** (a prior review of this PR exists in the conversation): verify each prior finding against the new diff, report resolved/unresolved status briefly, and give full treatment only to new or changed code.
 
-### Size the review
+### Size the review and choose execution mode
 
-Pick a strategy before diving in — size determines depth **and who does the reading** (see "Executing with subagents" below):
+Size, risk, separability, and available worker capacity determine who does the
+reading. A **primary agent** always owns the target, intent, change map, tooling,
+whole-change judgment, synthesis, severity, and final verdict. An **evidence
+scout** performs one bounded search. A **reviewer worker** performs an assigned
+read-only concern-and-file review.
 
-- **Small diff (< ~150 lines)**: full-depth pass on everything, entirely in your own context — subagent dispatch overhead costs more than it saves. Don't pad — a clean 20-line fix deserves a short review.
-- **Medium (~150–800 lines)**: full pass in your own context, highest-risk files first — but push evidence-gathering side-quests (call-site sweeps, schema checks, authz-middleware hunts, dead-code greps) to parallel read-only Explore subagents that return conclusions instead of file dumps.
-- **Large (> ~800 lines)**: rank files by risk first — migrations, auth/authz, payments/money, concurrency-touching code, external integrations get deep review; mechanical/generated/rename-only files get a skim. **List the files that got lighter scrutiny in the coverage overview.** Never silently skim. Then orchestrate: parallel reviewer subagents do the deep reading, you own synthesis and the verdict.
+If worker tooling is available, read exactly one matching runtime adapter before
+dispatching:
 
-### Executing with subagents (large diffs)
+- Codex collaboration tools: `references/runtime-codex.md`
+- Claude Code: `references/runtime-claude-code.md`
 
-If your harness has no subagent-dispatch tool, skip this section: do the large review yourself in risk-rank order, and list what got lighter scrutiny in the coverage overview.
+If neither adapter matches or dispatch is unavailable, review inline in
+risk-ranked order. List anything that received lighter scrutiny in the coverage
+overview.
 
-Delegation outsources **reading, not judgment**: each reviewer subagent does its own evidence-first verification inside its slice, and you still own dedup, severity, and the final document. Done right, raw diff hunks, full-file reads, and reference files never enter your context — only findings do.
+- The size ceilings remain binding even for high-risk changes. Risk changes
+  review depth and what the primary agent covers, not these ceilings.
+- **Small diff (< ~150 lines): zero workers.** Review everything inline. A clean
+  20-line fix deserves a short review, not orchestration overhead.
+- **Medium diff (~150-800 lines): zero or one evidence scout.** The primary agent
+  performs the full review. Dispatch at most one bounded, independent search when
+  it materially saves context or elapsed time, such as a call-site sweep, schema
+  check, authorization-middleware hunt, or dead-code search.
+- **Large diff (> ~800 lines): allocate by remaining worker capacity.** First
+  rank files by risk, then use this table:
+  - **Zero remaining worker slots:** dispatch no workers and complete the review
+    inline.
+  - **One remaining worker slot:** dispatch one consolidated reviewer worker;
+    the primary agent covers the remaining concerns inline.
+  - **Two remaining worker slots:** dispatch two reviewer workers; this is the
+    default.
+  - **Three or more remaining worker slots:** add a third worker only when a
+    genuinely separate high-risk concern cannot be combined cleanly with either
+    existing bundle, and state its rationale in the allocation.
+  Never exceed available worker capacity. Migrations, auth/authz, money,
+  concurrency, and external integrations get deep review;
+  mechanical/generated/rename-only files may get a skim, disclosed in the
+  coverage overview.
 
-1. Do Step 0 yourself (target, intent, change map, risk ranking, tooling run). Don't deep-read the high-risk files — that's the reviewers' job.
-2. Dispatch general-purpose reviewer subagents **in parallel, one per concern bundle present in the change**; skip a bundle whose concerns are absent and fold any stray relevant checks into another bundle's prompt:
-   - **Correctness & contracts** — Layers 1, 8, 11
-   - **Security & privacy** — Layers 2, 13
-   - **Data, deploy & config** — Layers 3, 4, 10
-   - **Production behavior** — Layers 5, 6, 7, 9
-   Keep Layers 12 and 14 for yourself — architecture fit and what's-missing need the whole-change view you built in Step 0.
-3. Every reviewer prompt contains, in this order:
-   - the **Scope and intent** section of this file, copied verbatim (every bundle, not just security — reviewers start with zero context);
-   - the target as **commands to run** (`gh pr diff <n>`, `git diff <base>...<head> -- <files>`) plus the risk-ranked file list for its bundle — never the pasted diff;
-   - **paths to read**: this SKILL.md (Review Principles, Evidence-gathering moves, its assigned layer sections) and the matching `references/*.md` for the stacks in its file list — paths and layer numbers, never pasted content;
-   - a 3–5 line change summary (intent + change map) and the tooling leads relevant to its bundle;
-   - the output contract below.
-4. **Reviewer output contract**: findings only — each gives `file:line` · severity guess · `[confidence]` tag · what's wrong · one line of evidence (what was actually read) · suggested fix — plus a short "couldn't inspect" list. No overview, no verdict, no per-layer filler; a clean slice returns "no findings" and the couldn't-inspect list.
-5. Synthesize: dedupe by root cause across reports (bundles overlap deliberately — the same flaw may return from two angles), **re-read the cited evidence for every finding you'd mark Blocking** — evidence-first applies to subagent claims too — recalibrate severity with the whole-change view, then write the Output Format yourself. Reviewers' "couldn't inspect" lists feed the coverage overview.
+Line count is a guide for depth, not permission to exceed a size ceiling. Keep a
+large mechanical diff inline when deep parallel review would add little value.
+Never leave a high-risk slice unassigned: if no worker owns it, the primary
+agent covers it inline.
 
-On a **re-review** of a large PR, one extra subagent can verify prior findings' resolved/unresolved status while the bundles cover new code.
+### Build concern bundles
+
+Delegation outsources reading, not judgment. After Step 0 and one tooling run,
+bundle the concerns actually present in the change by shared files, data flow,
+and risk. Combine or omit these common groupings rather than dispatching an
+empty worker:
+
+- **Correctness & contracts** — Layers 1, 8, 11
+- **Security & privacy** — Layers 2, 13
+- **Data, deploy & config** — Layers 3, 4, 10
+- **Production behavior** — Layers 5, 6, 7, 9
+
+Keep Layers 12 and 14 with the primary agent because architecture fit and
+what-is-missing require the whole-change view. On a large re-review, prior-finding
+status may become one bundle only when capacity remains after new high-risk code
+is covered.
+
+### Worker input and output contract
+
+Give each worker only:
+
+1. The target as commands to run plus its risk-ranked assigned files.
+2. A 3-5 line intent and change-map summary.
+3. Paths to this skill's Review Principles, Evidence-gathering moves, assigned
+   layers, and matching stack references.
+4. Tooling leads relevant to its assignment.
+5. This findings-only contract: `file:line` · severity suggestion · confidence ·
+   defect and consequence · evidence actually read · suggested fix, followed by
+   a short couldn't-inspect list. A clean slice returns `no findings`.
+
+Use paths instead of pasted diffs or duplicated skill prose whenever workers can
+read the repository. Worker prompts restate applicable user and repository
+constraints. Every worker is read-only: it must not edit files, create artifacts,
+change Git state, delegate, rerun the broad tooling, write the overview, or issue
+the final verdict.
+
+The primary agent deduplicates reports by root cause, re-reads cited evidence for
+every proposed Blocking finding, resolves conflicting reports from source,
+recalibrates severity with the whole-change view, records inspection gaps, and
+writes the Output Format. If a worker fails, cover its high-risk gap inline and
+disclose any lower-risk coverage gap; never silently drop the slice.
+
+If a worker changes the workspace, discard its report, disclose the mutation,
+preserve user-owned changes, and cover the high-risk slice inline.
 
 ### Leverage the project's own tooling first
 
@@ -79,7 +139,7 @@ Before manual review, check for and run whatever the repo already has — it's c
 - Security tooling if present: dependency audit, secret scan, SAST.
 - Treat tool output as **leads to verify and contextualize**, not findings to copy-paste. Don't spend manual effort on classes of issues the tooling already covers and passes.
 - If tooling exists but can't run (missing deps, no DB), note that in the coverage overview.
-- When delegating a large review, run the tooling **once** yourself and pass each reviewer bundle the leads relevant to it — reviewers don't re-run the suite.
+- When delegating a large review, run the tooling **once** yourself and pass each worker the leads relevant to it — workers don't re-run the suite.
 
 ### Evidence-gathering moves
 
@@ -117,9 +177,9 @@ Identify, from the files in the diff, the **language(s)**, **framework(s)**, and
 
 For a stack with no reference file (Ruby, Elixir, Swift, C++…), apply the universal layers plus your own knowledge of that ecosystem's idioms and failure modes — the layers below are stack-independent by design.
 
-When delegating, you still detect the stack — it scopes the bundles and tells you which reference files to assign — but each reviewer reads its own references; don't read them all yourself.
+When delegating, the primary agent detects the stack to scope bundles and assign reference paths; each worker reads only its own references.
 
-Work through every layer at the depth your sizing strategy allows — yourself, or through the reviewer bundles on a delegated large review. Don't skip a layer because nothing obvious jumps out — actively look. But only **report what's actually present**; don't pad the output.
+Work through every layer at the depth your sizing strategy allows — yourself, or through workers on a delegated large review. Don't skip a layer because nothing obvious jumps out — actively look. But only **report what's actually present**; don't pad the output.
 
 ## Layer 1 — Intent & Correctness
 

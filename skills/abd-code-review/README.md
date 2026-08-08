@@ -34,4 +34,11 @@ This skill is manual-only: invoke it with `/abd-code-review`. Review-related phr
 
 ## Compatibility
 
-The skill is agent-agnostic but expects the host agent to be able to read repository files and run the project's normal Git and verification commands.
+The core review workflow is portable across agent runtimes. It uses adaptive,
+risk-based delegation on Codex and Claude Code, loading only the matching runtime
+adapter. Small reviews stay inline, large reviews use bounded read-only workers,
+and the complete review still works without subagents when dispatch is
+unavailable.
+
+The host must be able to read repository files and run normal Git and
+verification commands.
